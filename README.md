@@ -16,9 +16,14 @@ from `kairos-foundation/templates/phone-app`.
 1. A space is a room or area; a thing sits in exactly one space. Name,
    kind and space are enough to save a thing.
 2. A space can be removed only when it is empty; deleting a thing asks first.
-3. The repo holds code and made-up test data only, never a real thing in
+3. Say a room (Lares 7): "Kitchen has a dishwasher, a fridge and an oven"
+   in the top field makes or finds the space and adds one thing per item;
+   a list in a space's field adds every item. Speech comes from the phone's
+   keyboard; the page only splits text and guesses kinds from a word list.
+   No model, no outbound call.
+4. The repo holds code and made-up test data only, never a real thing in
    the house. No copy-out exists.
-4. State is one JSON document in `localStorage` under `lares:v1`, on one
+5. State is one JSON document in `localStorage` under `lares:v1`, on one
    device. No backup, no sync.
 
 ## Run locally

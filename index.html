@@ -57,7 +57,7 @@
   </header>
   <section>
     <div class="capture">
-      <input id="field" placeholder="Add a space (Hall, Cellar…)" autocomplete="off" enterkeyhint="done">
+      <input id="field" placeholder="Add a space, or say a room" autocomplete="off" enterkeyhint="done">
       <button class="add" id="add" type="button">Add</button>
     </div>
     <div id="list"></div>
@@ -65,7 +65,7 @@
   </section>
 </div>
 <!-- Keep in step with CACHE in sw.js — the visible proof of which build is running. -->
-<span class="ver">lares-v1</span>
+<span class="ver">lares-v2</span>
 
 <script>
 // State: one JSON document in localStorage, on one device. No backup, no sync.
@@ -74,6 +74,19 @@
 // space are enough to save a thing; later stories add the other fields.
 const KEY = 'lares:v1';
 const KINDS = ['appliance', 'furniture', 'fixture', 'other'];
+// Say a room (Lares 7): the phone's keyboard turns speech into text; the
+// page only splits it. A kind is guessed from these words, else the
+// space's kind selector (else 'other' for a whole room).
+const KIND_WORDS = {
+  appliance: ['dishwasher', 'fridge', 'refrigerator', 'freezer', 'oven', 'stove', 'cooker', 'hob', 'microwave',
+    'toaster', 'kettle', 'coffee machine', 'espresso machine', 'washing machine', 'washer', 'dryer', 'boiler',
+    'furnace', 'water heater', 'heat pump', 'air conditioner', 'dehumidifier', 'humidifier', 'vacuum', 'tv',
+    'television', 'router', 'extractor', 'range hood', 'blender', 'mixer', 'iron', 'fan', 'water softener'],
+  furniture: ['sofa', 'couch', 'chair', 'armchair', 'table', 'desk', 'bed', 'wardrobe', 'dresser', 'shelf',
+    'shelves', 'bookcase', 'cabinet', 'stool', 'bench', 'sideboard', 'cupboard', 'chest', 'nightstand', 'rug', 'mirror'],
+  fixture: ['sink', 'tap', 'faucet', 'toilet', 'shower', 'bath', 'bathtub', 'radiator', 'light', 'lamp', 'window',
+    'door', 'fireplace', 'thermostat', 'smoke alarm', 'socket', 'switch', 'heater'],
+};
 let state = { spaces: [], things: [] };
 let editing = null;   // id of the thing whose editor is open
 
@@ -124,7 +137,7 @@ function render(){
         ${things.length ? '' : '<button class="drop" type="button" data-act="drop-space" aria-label="Remove this empty space">remove</button>'}</div>
       ${things.map(thingRow).join('')}
       <div class="add-thing">
-        <input data-f="new-thing" placeholder="Add a thing" autocomplete="off" enterkeyhint="done">
+        <input data-f="new-thing" placeholder="Add things" autocomplete="off" enterkeyhint="done">
         <select data-f="new-kind" aria-label="Kind">${kindOptions('appliance')}</select>
         <button class="add" type="button" data-act="add-thing">Add</button>
       </div>
@@ -132,25 +145,65 @@ function render(){
   }).join('');
 }
 
+// "a dishwasher, a fridge and the coffee machine." → three names.
+function splitItems(text){
+  return text.split(/\s*(?:,|;|\n|\band\b|\bplus\b)\s*/i)
+    .map(x => x.trim().replace(/[.!?]+$/, '').replace(/^(?:an?|the|some|one)\s+/i, '').trim())
+    .filter(Boolean);
+}
+// "Kitchen has a fridge" / "Kitchen: a fridge" → ['Kitchen', 'a fridge'], else null.
+function splitRoom(text){
+  const m = text.match(/^(.+?)\s*(?::|\s(?:has|have|contains|with)\s)\s*(.+)$/i);
+  return m ? [m[1].replace(/^(?:in\s+)?the\s+/i, '').trim(), m[2]] : null;
+}
+function guessKind(name){
+  const n = ' ' + name.toLowerCase().replace(/s\b/g, '') + ' ';
+  for (const [kind, words] of Object.entries(KIND_WORDS))
+    if (words.some(w => n.includes(' ' + w.replace(/s\b/g, '') + ' '))) return kind;
+  return null;
+}
+const capital = s => s.charAt(0).toUpperCase() + s.slice(1);
+function findOrMakeSpace(name){
+  const hit = state.spaces.find(s => s.name.toLowerCase() === name.toLowerCase());
+  if (hit) return hit;
+  const sp = { id: newId(), name: capital(name) };
+  state.spaces.push(sp);
+  return sp;
+}
+function addItems(space, text, fallbackKind){
+  const names = splitItems(text);
+  for (const name of names) state.things.push({ id: newId(), name, kind: guessKind(name) || fallbackKind, space: space.id });
+  return names.length;
+}
+
 function addSpace(){
-  const field = $('field'); const name = field.value.trim();
-  if (!name) return;
-  state.spaces.push({ id: newId(), name });
+  const field = $('field'); const text = field.value.trim();
+  if (!text) return;
+  const room = splitRoom(text);
+  let note = '';
+  if (room && room[0]) {
+    const sp = findOrMakeSpace(room[0]);
+    const n = addItems(sp, room[1], 'other');
+    note = `Added ${plural(n, 'thing')} to ${sp.name}.`;
+  } else {
+    findOrMakeSpace(text.replace(/[.!?]+$/, ''));
+  }
   field.value = ''; field.focus();
   render(); save();
+  if (note) $('status').textContent = note;
 }
 function addThing(spaceEl){
   const input = spaceEl.querySelector('[data-f="new-thing"]');
-  const name = input.value.trim();
-  if (!name) return;
+  if (!input.value.trim()) return;
   const kind = spaceEl.querySelector('[data-f="new-kind"]').value;
-  const space = spaceEl.dataset.space;
-  state.things.push({ id: newId(), name, kind, space });
+  const space = state.spaces.find(s => s.id === spaceEl.dataset.space);
+  const n = addItems(space, input.value, kind);
   render(); save();
+  if (n > 1) $('status').textContent = `Added ${plural(n, 'thing')} to ${space.name}.`;
   // Keep the cursor in this space's field: several things in a row, in seconds.
-  const again = document.querySelector(`[data-space="${space}"] [data-f="new-thing"]`);
+  const again = document.querySelector(`[data-space="${space.id}"] [data-f="new-thing"]`);
   if (again) again.focus();
-  const sel = document.querySelector(`[data-space="${space}"] [data-f="new-kind"]`);
+  const sel = document.querySelector(`[data-space="${space.id}"] [data-f="new-kind"]`);
   if (sel) sel.value = kind;
 }
 

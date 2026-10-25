@@ -77,7 +77,7 @@ test('a thing is added to its space with name and kind, several in a row', () =>
   addSpace('Studio');
   addThing('Studio', 'the kiln', 'appliance');
   addThing('Studio', 'workbench', 'furniture');
-  assert.deepEqual(thingsIn('Studio'), ['the kiln', 'workbench']);
+  assert.deepEqual(thingsIn('Studio'), ['kiln', 'workbench']);
   const [a, b] = stored().things;
   assert.equal(a.space, stored().spaces[0].id);
   assert.deepEqual([a.kind, b.kind], ['appliance', 'furniture']);
@@ -132,6 +132,43 @@ test('names are shown as text, never as markup', () => {
   addThing('<b>x</b>', '<img src=x>');
   assert.equal($$('.space b').length, 0);
   assert.equal($$('.space img').length, 0);
+});
+
+test('say a room: the space is made and each item is a thing with a guessed kind', () => {
+  const { addSpace, thingsIn, stored, $ } = boot();
+  addSpace('Kitchen has a dishwasher, a fridge and the coffee machine.');
+  assert.deepEqual(thingsIn('Kitchen'), ['dishwasher', 'fridge', 'coffee machine']);
+  assert.deepEqual(stored().things.map(t => t.kind), ['appliance', 'appliance', 'appliance']);
+  assert.equal($('#status').textContent, 'Added 3 things to Kitchen.');
+});
+
+test('say a room into a space that exists adds to it, whatever the case', () => {
+  const { addSpace, thingsIn, $$ } = boot({ seed: SEED });
+  addSpace('in the hall: an umbrella stand and a mirror');
+  assert.deepEqual($$('.space-name').map(e => e.textContent), ['Hall', 'Cellar']);
+  assert.deepEqual(thingsIn('Hall'), ['coat stand', 'umbrella stand', 'mirror']);
+});
+
+test('a room name alone is still just a space, and a new space gets a capital', () => {
+  const { addSpace, $$, stored } = boot();
+  addSpace('living room');
+  assert.deepEqual($$('.space-name').map(e => e.textContent), ['Living room']);
+  assert.equal(stored().things.length, 0);
+});
+
+test('a list in a space field adds every item; unknown words take the selected kind', () => {
+  const { addSpace, addThing, thingsIn, stored, $ } = boot();
+  addSpace('Studio');
+  addThing('Studio', 'a sofa and two armchairs, a kiln', 'fixture');
+  assert.deepEqual(thingsIn('Studio'), ['sofa', 'two armchairs', 'kiln']);
+  assert.deepEqual(stored().things.map(t => t.kind), ['furniture', 'furniture', 'fixture']);
+  assert.equal($('#status').textContent, 'Added 3 things to Studio.');
+});
+
+test('a whole room with unknown words files them as other', () => {
+  const { addSpace, stored } = boot();
+  addSpace('Garage: workbench and a lawnmower');
+  assert.deepEqual(stored().things.map(t => [t.name, t.kind]), [['workbench', 'other'], ['lawnmower', 'other']]);
 });
 
 test('the version marker matches the service-worker cache name', () => {
