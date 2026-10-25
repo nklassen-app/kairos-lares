@@ -1,0 +1,5 @@
+{
+  "permissions": {
+    "deny": ["mcp__Gmail", "mcp__Google_Calendar"]
+  }
+}

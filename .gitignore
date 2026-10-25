@@ -1,0 +1,62 @@
+# ─────────────────────────────────────────────────────────────
+# Canonical .gitignore — Kairos ecosystem
+# Source of truth: Foundation Charter v1.2, Part 7.
+# Copy this into every new repo. Merge additional app-specific
+# rules BELOW the canonical block; never remove or relax a line
+# above the "app-specific" divider. `.gitignore` is the boundary-
+# enforcement mechanism for version control — not a convenience.
+# One copy per GIT REPO, at its root (Part 7: "built once per
+# repo") — module folders inside a monorepo carry only their own
+# app-specific rules. Decided 2026-07-15; see kairos-system/docs/
+# DESIGN_NOTE_gitignore_once_per_repo.md.
+# ─────────────────────────────────────────────────────────────
+
+# ── Secrets and credentials — NEVER commit ──
+.env
+.env.*
+*.key
+config/*.key
+config/*-key.json
+config/credentials.json
+config/token*.json
+config/llm.json          # holds api_key; the gap the Kairos audit caught
+*-key.json
+*secret*
+*credentials*
+
+# ── Databases and their sidecars (may contain sensitive content) ──
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.db.bak*
+*.bak
+
+# ── Real personal data, fixtures, debug dumps ──
+*debug*dump*
+*_dump.md
+fixtures/real/           # real-data fixtures live here and never sync
+emails/
+*.eml
+
+# ── Local/machine-specific ──
+.claude/settings.local.json
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+.DS_Store
+
+# ── Encryption keys for at-rest sensitive stores ──
+home_kg.key
+*.fernet
+
+# ─────────────────────────────────────────────────────────────
+# App-specific rules go BELOW this line (add, never subtract).
+# ─────────────────────────────────────────────────────────────
+
+# kairos-lares is a standalone public repo (P14, 2026-09-27) — not tracked inside
+# kairos_v3. App-specific rules: none at the root — the Capacitor shell
+# keeps its own build/node_modules rules in native/.gitignore.

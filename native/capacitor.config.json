@@ -1,0 +1,12 @@
+{
+  "appId": "app.nklassen.lares",
+  "appName": "Lares",
+  "webDir": "www",
+  "server": {
+    "url": "https://nklassen-app.github.io/kairos-lares/",
+    "allowNavigation": ["nklassen-app.github.io"]
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

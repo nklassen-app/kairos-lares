@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f6f7f5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Lares">
+<title>Lares</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+  :root{
+    --board:#f6f7f5; --edge:#d3d6d1; --ink:#000000; --graphite:#5a6067;
+    --blue:#1b54b8; --red:#d5322b; --green:#1f7a4c;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--board);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.4;padding:20px 16px 56px;}
+  .wrap{max-width:520px;margin:0 auto;}
+  header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:22px;}
+  h1{font-size:21px;font-weight:650;letter-spacing:-.3px;margin:0;}
+  .count{font-size:14px;font-weight:600;color:var(--graphite);font-variant-numeric:tabular-nums;}
+  .capture{display:flex;gap:8px;margin-bottom:16px;}
+  input,select{font:inherit;font-size:16px;padding:10px 12px;background:#fff;border:1.5px solid var(--edge);border-radius:8px;color:var(--ink);min-width:0;}
+  input{flex:1;}
+  input:focus,select:focus{outline:none;border-color:var(--ink);}
+  .add{border:none;background:var(--ink);color:#fff;font:inherit;font-size:15px;font-weight:600;border-radius:8px;padding:0 16px;cursor:pointer;}
+  .empty{border:1.5px dashed var(--edge);border-radius:10px;padding:22px 16px;color:var(--graphite);font-size:14px;}
+  .space{border:1.5px solid var(--edge);border-radius:10px;background:#fff;margin-bottom:14px;}
+  .space-head{display:flex;align-items:baseline;gap:10px;padding:12px 14px 6px;}
+  .space-name{flex:1;font-size:17px;font-weight:650;}
+  .n{font-size:13px;color:var(--graphite);font-variant-numeric:tabular-nums;}
+  .drop{border:none;background:none;color:var(--graphite);font:inherit;font-size:13px;cursor:pointer;padding:0;}
+  .row{display:flex;align-items:baseline;gap:10px;padding:10px 14px;border-top:1px solid #ecefea;cursor:pointer;}
+  .thing{flex:1;font-size:16px;word-break:break-word;}
+  .kind{font-size:12px;color:var(--graphite);}
+  .edit{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px;border-top:1px solid #ecefea;background:#fafbf9;}
+  .edit input{flex:1 1 100%;}
+  .edit select{flex:1;}
+  .edit .row-btns{flex:1 1 100%;display:flex;gap:8px;justify-content:flex-end;}
+  .ghost{border:1.5px solid var(--edge);background:#fff;color:var(--ink);font:inherit;font-size:14px;border-radius:8px;padding:8px 14px;cursor:pointer;}
+  .danger{color:var(--red);}
+  .add-thing{display:flex;gap:8px;padding:10px 14px 12px;border-top:1px solid #ecefea;}
+  .add-thing select{flex:0 0 auto;}
+  .note{font-size:13px;color:var(--graphite);margin:10px 2px 0;}
+  .ver{position:fixed;right:10px;bottom:8px;font-size:11px;color:var(--graphite);opacity:.6;}
+  :focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Lares</h1>
+    <span class="count" id="count"></span>
+  </header>
+  <section>
+    <div class="capture">
+      <input id="field" placeholder="Add a space (Hall, Cellar…)" autocomplete="off" enterkeyhint="done">
+      <button class="add" id="add" type="button">Add</button>
+    </div>
+    <div id="list"></div>
+    <p class="note" id="status"></p>
+  </section>
+</div>
+<!-- Keep in step with CACHE in sw.js — the visible proof of which build is running. -->
+<span class="ver">lares-v1</span>
+
+<script>
+// State: one JSON document in localStorage, on one device. No backup, no sync.
+// A space is a room or area; a thing sits in exactly one space (house twin,
+// kairos_v3/kairos-system/docs/DESIGN_NOTE_house_twin.md). Name, kind and
+// space are enough to save a thing; later stories add the other fields.
+const KEY = 'lares:v1';
+const KINDS = ['appliance', 'furniture', 'fixture', 'other'];
+let state = { spaces: [], things: [] };
+let editing = null;   // id of the thing whose editor is open
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const kindOptions = sel => KINDS.map(k => `<option value="${k}"${k === sel ? ' selected' : ''}>${k}</option>`).join('');
+
+function load(){
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) { const d = JSON.parse(raw); state = { spaces: d.spaces || [], things: d.things || [] }; }
+  } catch (e) { $('status').textContent = 'Starting fresh.'; }
+  render();
+}
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(state)); $('status').textContent = ''; }
+  catch (e) { $('status').textContent = 'Not saved — this browser is blocking storage.'; }
+}
+function plural(n, one){ return n + ' ' + one + (n === 1 ? '' : 's'); }
+
+function thingRow(t){
+  if (editing !== t.id) {
+    return `<div class="row" data-thing="${t.id}"><span class="thing">${esc(t.name)}</span><span class="kind">${esc(t.kind)}</span></div>`;
+  }
+  const spaces = state.spaces.map(s => `<option value="${s.id}"${s.id === t.space ? ' selected' : ''}>${esc(s.name)}</option>`).join('');
+  return `<div class="edit" data-edit="${t.id}">
+    <input data-f="name" value="${esc(t.name)}" autocomplete="off">
+    <select data-f="kind">${kindOptions(t.kind)}</select>
+    <select data-f="space">${spaces}</select>
+    <div class="row-btns">
+      <button class="ghost danger" type="button" data-act="delete">Delete</button>
+      <button class="ghost" type="button" data-act="cancel">Cancel</button>
+      <button class="add" type="button" data-act="save">Save</button>
+    </div>
+  </div>`;
+}
+
+function render(){
+  const ns = state.spaces.length, nt = state.things.length;
+  $('count').textContent = ns ? plural(ns, 'space') + ' · ' + plural(nt, 'thing') : '';
+  const l = $('list');
+  if (!ns){ l.innerHTML = '<div class="empty">No spaces yet. Add a room or area to start.</div>'; return; }
+  l.innerHTML = state.spaces.map(s => {
+    const things = state.things.filter(t => t.space === s.id);
+    return `<div class="space" data-space="${s.id}">
+      <div class="space-head"><span class="space-name">${esc(s.name)}</span><span class="n">${things.length}</span>
+        ${things.length ? '' : '<button class="drop" type="button" data-act="drop-space" aria-label="Remove this empty space">remove</button>'}</div>
+      ${things.map(thingRow).join('')}
+      <div class="add-thing">
+        <input data-f="new-thing" placeholder="Add a thing" autocomplete="off" enterkeyhint="done">
+        <select data-f="new-kind" aria-label="Kind">${kindOptions('appliance')}</select>
+        <button class="add" type="button" data-act="add-thing">Add</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function addSpace(){
+  const field = $('field'); const name = field.value.trim();
+  if (!name) return;
+  state.spaces.push({ id: newId(), name });
+  field.value = ''; field.focus();
+  render(); save();
+}
+function addThing(spaceEl){
+  const input = spaceEl.querySelector('[data-f="new-thing"]');
+  const name = input.value.trim();
+  if (!name) return;
+  const kind = spaceEl.querySelector('[data-f="new-kind"]').value;
+  const space = spaceEl.dataset.space;
+  state.things.push({ id: newId(), name, kind, space });
+  render(); save();
+  // Keep the cursor in this space's field: several things in a row, in seconds.
+  const again = document.querySelector(`[data-space="${space}"] [data-f="new-thing"]`);
+  if (again) again.focus();
+  const sel = document.querySelector(`[data-space="${space}"] [data-f="new-kind"]`);
+  if (sel) sel.value = kind;
+}
+
+$('add').addEventListener('click', addSpace);
+$('field').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); addSpace(); } });
+
+$('list').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  if (e.target.matches('[data-f="new-thing"]')) { e.preventDefault(); addThing(e.target.closest('.space')); }
+  else if (e.target.closest('.edit')) { e.preventDefault(); e.target.closest('.edit').querySelector('[data-act="save"]').click(); }
+});
+$('list').addEventListener('click', e => {
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  const spaceEl = e.target.closest('.space');
+  if (act === 'add-thing') return addThing(spaceEl);
+  if (act === 'drop-space') {
+    const id = spaceEl.dataset.space;
+    if (state.things.some(t => t.space === id)) return;   // only an empty space goes
+    state.spaces = state.spaces.filter(s => s.id !== id);
+    render(); save(); return;
+  }
+  const edit = e.target.closest('.edit');
+  if (edit) {
+    const t = state.things.find(x => x.id === edit.dataset.edit);
+    if (act === 'cancel') { editing = null; render(); }
+    else if (act === 'delete') {
+      if (!confirm(`Delete “${t.name}”?`)) return;
+      state.things = state.things.filter(x => x.id !== t.id);
+      editing = null; render(); save();
+    } else if (act === 'save') {
+      const name = edit.querySelector('[data-f="name"]').value.trim();
+      if (!name) return;
+      t.name = name;
+      t.kind = edit.querySelector('[data-f="kind"]').value;
+      t.space = edit.querySelector('[data-f="space"]').value;
+      editing = null; render(); save();
+    }
+    return;
+  }
+  const row = e.target.closest('[data-thing]');
+  if (row) { editing = row.dataset.thing; render(); }
+});
+
+load();
+// updateViaCache:'none' keeps the HTTP cache out of sw.js checks, and every
+// return to the foreground forces one — for WebViews that skip the re-check.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update();
+    });
+  });
+}
+</script>
+</body>
+</html>

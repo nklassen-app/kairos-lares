@@ -1,0 +1,7 @@
+{
+  "name": "lares-tests",
+  "private": true,
+  "description": "DOM-level tests for Lares — runs index.html in jsdom under node's built-in test runner",
+  "scripts": { "test": "node --test" },
+  "devDependencies": { "jsdom": "24.1.3" }
+}
