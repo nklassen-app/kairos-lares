@@ -58,6 +58,7 @@ Kairos exists to take load off N., not to add it. N. is the bottleneck, so every
 ## Session start — the glance
 - **Before touching any file, run `kairos-foundation/scripts/kairos_status.sh`.** It fetches first (P12), so on a device with a live `ssh-agent` this is how another device's push — the phone and the Chromebook working in parallel — shows up as "behind" before you commit on top of it, not after a rejected push. If it shows "behind" on a repo you're about to touch, pull/merge first.
 - Applies the same way on every device — the Chromebook, the phone, any future host. No exception for "just a quick change."
+- **Plan for the device you're on.** The glance's first lines say where the session runs and what it cannot do there (build an APK, create a repo, reach a live page). Pick or recommend a story whose steps can finish on this device; if one needs another, say so before starting, and write that step as "Claude, in a Chromebook session".
 - **The dashboard** (issue `nklassen-app/kairos_v3#11`, pinned; N. ticks it on the phone). When `kairos_v3` is on this device and the GitHub tools are reachable: **at session start**, after the glance, save the issue body to the scratchpad and run `kairos-foundation/scripts/dashboard.py --apply-ticks <file>` — N.'s ticks become ☑ in the backlog, committed with the session's work. **At session end**, after the last backlog change, write the output of `dashboard.py` to the issue body. The issue is never edited by hand except N.'s ticks.
 
 ## When to stop and ask
