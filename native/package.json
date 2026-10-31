@@ -4,7 +4,7 @@
   "description": "Capacitor Android shell for Lares — loads the GitHub Pages site in a WebView so the app has its own launcher icon and survives Chrome being blocked",
   "private": true,
   "scripts": {
-    "build:apk": "node make-icons.mjs && capacitor-assets generate --android && sed -i 's/android:allowBackup=\"true\"/android:allowBackup=\"false\"/' android/app/src/main/AndroidManifest.xml && cd android && ./gradlew assembleDebug --no-daemon"
+    "build:apk": "node make-icons.mjs && capacitor-assets generate --android && sed -i 's/android:allowBackup=\"true\"/android:allowBackup=\"false\"/' android/app/src/main/AndroidManifest.xml && cd android && ./gradlew assembleDebug --no-daemon && cp app/build/outputs/apk/debug/app-debug.apk ../../lares-app-debug.apk"
   },
   "dependencies": {
     "@capacitor/android": "6.2.1",

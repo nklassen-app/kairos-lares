@@ -60,3 +60,6 @@ home_kg.key
 # kairos-lares is a standalone public repo (P14, 2026-09-27) — not tracked inside
 # kairos_v3. App-specific rules: none at the root — the Capacitor shell
 # keeps its own build/node_modules rules in native/.gitignore.
+
+# The APK the build drops at the root, for Drive — never committed (2026-10-31).
+/*.apk

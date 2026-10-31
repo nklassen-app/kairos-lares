@@ -24,7 +24,8 @@ On a small build machine (under 3 GB RAM, no swap) put
 `org.gradle.jvmargs=-Xmx1280m` and `org.gradle.workers.max=2` in
 `android/gradle.properties` first, or the JVM is killed.
 
-APK lands at `android/app/build/outputs/apk/debug/app-debug.apk`. Transfer to
+APK lands at the repo root as `lares-app-debug.apk` (copied from
+`android/app/build/outputs/apk/debug/`, ignored by git). Transfer to
 the phone (Drive is fine) and tap to install; debug-signed, sideload only.
 Rebuilds reuse the same auto-generated debug keystore, so they install over
 the top without losing data. **The APK is never committed.** Never uninstall
