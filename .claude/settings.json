@@ -2,7 +2,10 @@
   "permissions": {
     "deny": [
       "mcp__Gmail",
-      "mcp__Google_Calendar"
+      "mcp__Google_Calendar",
+      "Read(~/kairos-private/**)",
+      "Edit(~/kairos-private/**)",
+      "Write(~/kairos-private/**)"
     ]
   },
   "hooks": {
@@ -24,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for d in \"$CLAUDE_PROJECT_DIR\" \"$CLAUDE_PROJECT_DIR/..\" \"$CLAUDE_PROJECT_DIR/../kairos_v3\"; do s=\"$d/kairos-foundation/scripts/no_push_guard.py\"; [ -f \"$s\" ] && exec python3 \"$s\"; done; grep -qE 'push|gh pr merge' && { echo 'Blocked: no_push_guard.py is not on this device, so pushes and merges are blocked. Commit and tell N.' >&2; exit 2; }; exit 0",
+            "command": "for d in \"$CLAUDE_PROJECT_DIR\" \"$CLAUDE_PROJECT_DIR/..\" \"$CLAUDE_PROJECT_DIR/../kairos_v3\"; do s=\"$d/kairos-foundation/scripts/session_guard.py\"; [ -f \"$s\" ] && exec python3 \"$s\"; done; grep -qE 'push|gh pr merge' && { echo 'Blocked: session_guard.py is not on this device, so pushes and merges are blocked. Commit and tell N.' >&2; exit 2; }; exit 0",
             "timeout": 20
           }
         ]
