@@ -23,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for d in \"$CLAUDE_PROJECT_DIR\" \"$CLAUDE_PROJECT_DIR/..\" \"$CLAUDE_PROJECT_DIR/../kairos_v3\"; do s=\"$d/kairos-foundation/scripts/session_start.sh\"; [ -f \"$s\" ] && exec bash \"$s\"; done; echo \"kairos_v3 is not on this device, so no glance: fetch this repo, read git log -5 and git status, and tell N. before anything else.\"",
+            "command": "for d in \"$(dirname \"$(readlink -f \"$HOME/.claude/settings.json\")\")/..\" \"$CLAUDE_PROJECT_DIR\" \"$CLAUDE_PROJECT_DIR/..\" \"$CLAUDE_PROJECT_DIR/../kairos_v3\"; do s=\"$d/kairos-foundation/scripts/session_start.sh\"; [ -f \"$s\" ] && exec bash \"$s\"; done; echo \"kairos_v3 is not on this device, so no glance: fetch this repo, read git log -5 and git status, and tell N. before anything else.\"",
             "timeout": 300
           }
         ]
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for d in \"$CLAUDE_PROJECT_DIR\" \"$CLAUDE_PROJECT_DIR/..\" \"$CLAUDE_PROJECT_DIR/../kairos_v3\"; do s=\"$d/kairos-foundation/scripts/session_guard.py\"; [ -f \"$s\" ] && exec python3 \"$s\"; done; grep -qE 'push|gh pr merge' && { echo 'Blocked: session_guard.py is not on this device, so pushes and merges are blocked. Commit and tell N.' >&2; exit 2; }; exit 0",
+            "command": "for d in \"$(dirname \"$(readlink -f \"$HOME/.claude/settings.json\")\")/..\" \"$CLAUDE_PROJECT_DIR\" \"$CLAUDE_PROJECT_DIR/..\" \"$CLAUDE_PROJECT_DIR/../kairos_v3\"; do s=\"$d/kairos-foundation/scripts/session_guard.py\"; [ -f \"$s\" ] && exec python3 \"$s\"; done; grep -qE 'push|gh pr merge' && { echo 'Blocked: session_guard.py is not on this device, so pushes and merges are blocked. Commit and tell N.' >&2; exit 2; }; exit 0",
             "timeout": 20
           }
         ]
