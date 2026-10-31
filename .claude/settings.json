@@ -1,5 +1,34 @@
 {
   "permissions": {
-    "deny": ["mcp__Gmail", "mcp__Google_Calendar"]
+    "deny": [
+      "mcp__Gmail",
+      "mcp__Google_Calendar"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for d in \"$CLAUDE_PROJECT_DIR\" \"$CLAUDE_PROJECT_DIR/..\" \"$CLAUDE_PROJECT_DIR/../kairos_v3\"; do s=\"$d/kairos-foundation/scripts/session_start.sh\"; [ -f \"$s\" ] && exec bash \"$s\"; done; echo \"kairos_v3 is not on this device, so no glance: fetch this repo, read git log -5 and git status, and tell N. before anything else.\"",
+            "timeout": 300
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for d in \"$CLAUDE_PROJECT_DIR\" \"$CLAUDE_PROJECT_DIR/..\" \"$CLAUDE_PROJECT_DIR/../kairos_v3\"; do s=\"$d/kairos-foundation/scripts/no_push_guard.py\"; [ -f \"$s\" ] && exec python3 \"$s\"; done; grep -qE 'push|gh pr merge' && { echo 'Blocked: no_push_guard.py is not on this device, so pushes and merges are blocked. Commit and tell N.' >&2; exit 2; }; exit 0",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
   }
 }
