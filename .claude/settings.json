@@ -5,7 +5,15 @@
       "mcp__Google_Calendar",
       "Read(~/kairos-private/**)",
       "Edit(~/kairos-private/**)",
-      "Write(~/kairos-private/**)"
+      "Write(~/kairos-private/**)",
+      "mcp__claude_ai_Gmail",
+      "mcp__claude_ai_Google_Calendar",
+      "mcp__claude_ai_Google_Drive",
+      "mcp__Google_Drive",
+      "mcp__claude-in-chrome",
+      "mcp__computer-use",
+      "mcp__Claude_Browser",
+      "mcp__remote-devices"
     ]
   },
   "hooks": {
