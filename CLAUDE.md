@@ -35,6 +35,7 @@ The rules for every Kairos session, under the **Foundation Charter** (`kairos-fo
 - **Err toward the smallest thing that works.** Nothing speculative (features, abstractions, analytics, auth, hosting, backups): flag it as deferred. Rigor scales with tier. **Never build Tier 2** (multi-user, other people's data) without N.'s explicit go-ahead.
 - **One canonical home per thing.** A copy is generated or linked, never kept in step by hand; a reconciliation is a signal to remove the duplicate.
 - **No shared Kairos surface:** a module gets the smallest front end its use needs; an unused one is retired, not polished.
+- **Test first:** write the failing test from the story's DoD, see it fail, then write the code. The push audit runs every suite and refuses code without a passing test (`test_gate.sh`); a change that honestly needs no test says why in a `No-test: <reason>` commit line, which N. reads.
 - **A story must be tryable on the real surface within one session.** If it's wider, say so before building and split it.
 - **At most three projects in focus in a week** (the backlog's focus line). Build work on a parked project: flag it and don't start; N. decides.
 
