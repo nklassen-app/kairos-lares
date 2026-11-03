@@ -48,6 +48,24 @@
   .fields{flex:1 1 100%;font-size:13px;color:var(--graphite);word-break:break-word;}
   .fields div{padding:2px 0;}
   label.ghost{display:inline-block;}
+  #due:not(:empty){border:1.5px solid var(--edge);border-radius:10px;background:#fff;margin-bottom:14px;}
+  .due-head{font-size:15px;font-weight:650;margin:0;padding:12px 14px 6px;}
+  .due-row{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:10px 14px;border-top:1px solid #ecefea;}
+  .due-main{flex:1;display:flex;justify-content:space-between;gap:10px;min-width:0;}
+  .due-what{font-size:15px;word-break:break-word;}
+  .due-when{font-size:13px;color:var(--graphite);white-space:nowrap;}
+  .due-when.late{color:var(--red);}
+  .due-sub{flex:1 1 100%;font-size:12px;color:var(--graphite);}
+  .sub{flex:1 1 100%;font-size:12px;font-weight:650;color:var(--graphite);text-transform:uppercase;letter-spacing:.4px;margin-top:6px;}
+  .need{flex:1 1 100%;display:flex;gap:10px;align-items:baseline;font-size:14px;}
+  .need-text{flex:1;word-break:break-word;}
+  .need-last{font-size:12px;color:var(--graphite);}
+  .need-add{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:8px;}
+  .need-add [data-f="need-what"]{flex:1 1 100%;}
+  .need-add [data-f="need-every"]{flex:0 0 76px;}
+  .fld{flex:1 1 100%;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--graphite);}
+  .fld input{flex:1;}
+  a.manual{flex:1 1 100%;font-size:14px;color:var(--blue);}
   .ver{position:fixed;right:10px;bottom:8px;font-size:11px;color:var(--graphite);opacity:.6;}
   :focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
 </style>
@@ -63,6 +81,7 @@
       <input id="field" placeholder="Add a space, or say a room" autocomplete="off" enterkeyhint="done">
       <button class="add" id="add" type="button">Add</button>
     </div>
+    <div id="due"></div>
     <div id="list"></div>
     <p class="note" id="hint"></p>
     <p class="note" id="status"></p>
@@ -72,7 +91,7 @@
   </section>
 </div>
 <!-- Keep in step with CACHE in sw.js — the visible proof of which build is running. -->
-<span class="ver">lares-v6</span>
+<span class="ver">lares-v7</span>
 
 <script>
 // State: one JSON document in localStorage, on one device. No backup, no sync.
@@ -121,11 +140,29 @@ function thingRow(t){
     return `<div class="row" data-thing="${t.id}"><span class="thing">${esc(t.name)}</span><span class="kind">${esc(t.kind)}</span></div>`;
   }
   const spaces = state.spaces.map(s => `<option value="${s.id}"${s.id === t.space ? ' selected' : ''}>${esc(s.name)}</option>`).join('');
+  const r = t.repair || {};
   return `<div class="edit" data-edit="${t.id}">
     <input data-f="name" value="${esc(t.name)}" autocomplete="off">
     <select data-f="kind">${kindOptions(t.kind)}</select>
     <select data-f="space">${spaces}</select>
     ${t.art ? `<div class="fields">${artRows(t.art, '').map(([k, v]) => `<div>${esc(k)}: ${esc(v)}</div>`).join('')}</div>` : ''}
+    <div class="sub">Needs</div>
+    ${(t.needs || []).map(n => `<div class="need" data-need="${n.id}"><span class="need-text">${esc(needText(n))}</span>
+      <span class="need-last">${n.last ? 'last ' + esc(n.last) : 'never done'}</span>
+      <button class="drop" type="button" data-act="need-drop" aria-label="Remove this need">remove</button></div>`).join('')}
+    <div class="need-add">
+      <input data-f="need-what" placeholder="What, e.g. replace the filter" autocomplete="off">
+      <input data-f="need-every" type="number" min="1" step="1" inputmode="numeric" placeholder="Every" aria-label="Every">
+      <select data-f="need-unit" aria-label="Unit">${UNITS.map(u => `<option${u === 'months' ? ' selected' : ''}>${u}</option>`).join('')}</select>
+      <input data-f="need-who" placeholder="Who" autocomplete="off">
+      <button class="ghost" type="button" data-act="need-add">Add need</button>
+    </div>
+    <div class="sub">Repair</div>
+    <input data-f="repair-manual" placeholder="Manual link" value="${esc(r.manual || '')}" autocomplete="off">
+    ${/^https?:\/\//i.test(r.manual || '') ? `<a class="manual" href="${esc(r.manual)}" target="_blank" rel="noopener">Open the manual</a>` : ''}
+    <input data-f="repair-codes" placeholder="Error codes" value="${esc(r.codes || '')}" autocomplete="off">
+    <input data-f="repair-parts" placeholder="Parts" value="${esc(r.parts || '')}" autocomplete="off">
+    <label class="fld">Warranty ends <input data-f="repair-warranty" type="date" value="${esc(r.warranty || '')}"></label>
     <div class="row-btns">
       <button class="ghost danger" type="button" data-act="delete">Delete</button>
       <button class="ghost" type="button" data-act="cancel">Cancel</button>
@@ -134,7 +171,57 @@ function thingRow(t){
   </div>`;
 }
 
+// Lares 2 — what each thing needs. A need is { what, every, unit, who, last };
+// it is due when last + every has come, or within DUE_AHEAD days, or when it
+// was never done. "Done" sets last to today. Repair facts sit beside them.
+const UNITS = ['days', 'weeks', 'months', 'years'];
+const DUE_AHEAD = 14;
+const pad = n => String(n).padStart(2, '0');
+const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const dayOf = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+function nextDue(n){
+  if (!n.last) return null;
+  const d = dayOf(n.last);
+  if (n.unit === 'days') d.setDate(d.getDate() + n.every);
+  else if (n.unit === 'weeks') d.setDate(d.getDate() + 7 * n.every);
+  else if (n.unit === 'months') d.setMonth(d.getMonth() + n.every);
+  else d.setFullYear(d.getFullYear() + n.every);
+  return d;
+}
+const needText = n => `${n.what} · every ${n.every === 1 ? n.unit.replace(/s$/, '') : n.every + ' ' + n.unit}${n.who ? ' · ' + n.who : ''}`;
+function whenText(days){
+  if (days === -Infinity) return 'never done';
+  if (days < 0) return `overdue ${plural(-days, 'day')}`;
+  return days === 0 ? 'due today' : `due in ${plural(days, 'day')}`;
+}
+function renderDue(){
+  const today = dayOf(isoDate(new Date()));
+  const items = state.things.flatMap(t => (t.needs || []).map(n => {
+    const due = nextDue(n);
+    return { t, n, days: due ? Math.round((due - today) / 86400000) : -Infinity };
+  })).filter(x => x.days <= DUE_AHEAD).sort((a, b) => a.days - b.days);
+  $('due').innerHTML = items.length ? '<h2 class="due-head">Due</h2>' + items.map(({ t, n, days }) => {
+    const sp = state.spaces.find(s => s.id === t.space);
+    return `<div class="due-row" data-due-thing="${t.id}" data-need="${n.id}">
+      <div class="due-main"><span class="due-what">${esc(t.name)} · ${esc(n.what)}</span>
+        <span class="due-when${days < 0 && days !== -Infinity ? ' late' : ''}">${whenText(days)}</span></div>
+      <div class="due-sub">${esc(sp ? sp.name : '')}${n.who ? ' · ' + esc(n.who) : ''}</div>
+      <button class="ghost" type="button" data-act="need-done">Done</button>
+    </div>`;
+  }).join('') : '';
+}
+// What the open editor holds goes into the thing (Save, and before a need changes).
+function readEditor(edit, t){
+  const v = f => edit.querySelector(`[data-f="${f}"]`).value.trim();
+  if (v('name')) t.name = v('name');
+  t.kind = v('kind');
+  t.space = v('space');
+  const repair = { manual: v('repair-manual'), codes: v('repair-codes'), parts: v('repair-parts'), warranty: v('repair-warranty') };
+  if (Object.values(repair).some(Boolean)) t.repair = repair; else delete t.repair;
+}
+
 function render(){
+  renderDue();
   const ns = state.spaces.length, nt = state.things.length;
   $('count').textContent = ns ? plural(ns, 'space') + ' · ' + plural(nt, 'thing') : '';
   $('hint').textContent = nt ? 'Tap a thing to rename, move or delete it.' : '';
@@ -285,7 +372,16 @@ $('field').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventD
 $('list').addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
   if (e.target.matches('[data-f="new-thing"]')) { e.preventDefault(); addThing(e.target.closest('.space')); }
+  else if (e.target.closest('.need-add')) { e.preventDefault(); e.target.closest('.edit').querySelector('[data-act="need-add"]').click(); }
   else if (e.target.closest('.edit')) { e.preventDefault(); e.target.closest('.edit').querySelector('[data-act="save"]').click(); }
+});
+$('due').addEventListener('click', e => {
+  if (e.target.closest('[data-act]')?.dataset.act !== 'need-done') return;
+  const row = e.target.closest('.due-row');
+  const t = state.things.find(x => x.id === row.dataset.dueThing);
+  const n = t.needs.find(x => x.id === row.dataset.need);
+  n.last = isoDate(new Date());
+  render(); save();
 });
 $('list').addEventListener('click', e => {
   const act = e.target.closest('[data-act]')?.dataset.act;
@@ -310,12 +406,21 @@ $('list').addEventListener('click', e => {
       state.things = state.things.filter(x => x.id !== t.id);
       editing = null; render(); save();
     } else if (act === 'save') {
-      const name = edit.querySelector('[data-f="name"]').value.trim();
-      if (!name) return;
-      t.name = name;
-      t.kind = edit.querySelector('[data-f="kind"]').value;
-      t.space = edit.querySelector('[data-f="space"]').value;
+      if (!edit.querySelector('[data-f="name"]').value.trim()) return;
+      readEditor(edit, t);
       editing = null; render(); save();
+    } else if (act === 'need-add') {
+      const what = edit.querySelector('[data-f="need-what"]').value.trim();
+      const every = Number(edit.querySelector('[data-f="need-every"]').value);
+      if (!what || !Number.isInteger(every) || every < 1) return;
+      readEditor(edit, t);
+      (t.needs = t.needs || []).push({ id: newId(), what, every, unit: edit.querySelector('[data-f="need-unit"]').value,
+        who: edit.querySelector('[data-f="need-who"]').value.trim() });
+      render(); save();
+    } else if (act === 'need-drop') {
+      readEditor(edit, t);
+      t.needs = t.needs.filter(n => n.id !== e.target.closest('[data-need]').dataset.need);
+      render(); save();
     }
     return;
   }
