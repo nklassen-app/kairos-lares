@@ -1,4 +1,4 @@
-const CACHE = 'lares-v4';   // say-a-room fixes  // bump on EVERY content change, and the .ver marker in index.html with it
+const CACHE = 'lares-v5';   // delete a space with its things  // bump on EVERY content change, and the .ver marker in index.html with it
 const ASSETS = ['.', 'index.html', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', e => {

@@ -15,7 +15,9 @@ from `kairos-foundation/templates/phone-app`.
 
 1. A space is a room or area; a thing sits in exactly one space. Name,
    kind and space are enough to save a thing.
-2. A space can be removed only when it is empty; deleting a thing asks first.
+2. Removing a space removes its things; when it has any, it asks first and
+   names the count. Deleting a thing asks first; a tap on a thing opens it
+   (rename, kind, space, delete).
 3. Say a room (Lares 7): "Kitchen has a dishwasher, a fridge and an oven"
    in the top field makes or finds the space and adds one thing per item;
    a list in a space's field adds every item. Speech comes from the phone's

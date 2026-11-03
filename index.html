@@ -61,11 +61,12 @@
       <button class="add" id="add" type="button">Add</button>
     </div>
     <div id="list"></div>
+    <p class="note" id="hint"></p>
     <p class="note" id="status"></p>
   </section>
 </div>
 <!-- Keep in step with CACHE in sw.js — the visible proof of which build is running. -->
-<span class="ver">lares-v4</span>
+<span class="ver">lares-v5</span>
 
 <script>
 // State: one JSON document in localStorage, on one device. No backup, no sync.
@@ -129,13 +130,14 @@ function thingRow(t){
 function render(){
   const ns = state.spaces.length, nt = state.things.length;
   $('count').textContent = ns ? plural(ns, 'space') + ' · ' + plural(nt, 'thing') : '';
+  $('hint').textContent = nt ? 'Tap a thing to rename, move or delete it.' : '';
   const l = $('list');
   if (!ns){ l.innerHTML = '<div class="empty">No spaces yet. Add a room or area to start.</div>'; return; }
   l.innerHTML = state.spaces.map(s => {
     const things = state.things.filter(t => t.space === s.id);
     return `<div class="space" data-space="${s.id}">
       <div class="space-head"><span class="space-name">${esc(s.name)}</span><span class="n">${things.length}</span>
-        ${things.length ? '' : '<button class="drop" type="button" data-act="drop-space" aria-label="Remove this empty space">remove</button>'}</div>
+        <button class="drop" type="button" data-act="drop-space" aria-label="Remove this space">remove</button></div>
       ${things.map(thingRow).join('')}
       <div class="add-thing">
         <input data-f="new-thing" placeholder="Add things" autocomplete="off" enterkeyhint="done">
@@ -248,9 +250,13 @@ $('list').addEventListener('click', e => {
   const spaceEl = e.target.closest('.space');
   if (act === 'add-thing') return addThing(spaceEl);
   if (act === 'drop-space') {
-    const id = spaceEl.dataset.space;
-    if (state.things.some(t => t.space === id)) return;   // only an empty space goes
-    state.spaces = state.spaces.filter(s => s.id !== id);
+    // An empty space goes at once; one with things asks first, naming the count.
+    const sp = state.spaces.find(s => s.id === spaceEl.dataset.space);
+    const n = state.things.filter(t => t.space === sp.id).length;
+    if (n && !confirm(`Delete ${sp.name} and its ${plural(n, 'thing')}?`)) return;
+    state.things = state.things.filter(t => t.space !== sp.id);
+    state.spaces = state.spaces.filter(s => s.id !== sp.id);
+    editing = null;
     render(); save(); return;
   }
   const edit = e.target.closest('.edit');
