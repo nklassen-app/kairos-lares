@@ -28,8 +28,15 @@ from `kairos-foundation/templates/phone-app`.
    status line; a count in the top field ("5 locks: …") is not a room, so
    nothing is added. No model, no outbound call.
 4. The repo holds code and made-up test data only, never a real thing in
-   the house. No copy-out exists.
-5. State is one JSON document in `localStorage` under `lares:v1`, on one
+   the house. No copy-out exists (a test pins that the page has no export,
+   share, clipboard, download or network call).
+5. The art collection (Lares 3): "Import art file" reads `artworks.json`
+   (`{ works: [...] }`) on the phone. Each work becomes a thing of kind art
+   with every field kept as it came, shown read-only when it is opened. A
+   work goes to the space its `location` names, else to "Art to place"; a
+   second import updates each work by its `id`. The art list is Crown jewels:
+   it lives in this phone's browser only, and its tests use made-up works.
+6. State is one JSON document in `localStorage` under `lares:v1`, on one
    device. No backup, no sync.
 
 ## Run locally

@@ -256,3 +256,85 @@ test('the version marker matches the service-worker cache name', () => {
   const cache = SW.match(/const CACHE = '([^']+)'/)[1];
   assert.equal($('.ver').textContent, cache);
 });
+
+// ---- Lares 3: the art collection, on the phone only ----
+// Made-up works, built from the schema's field names (DESIGN_NOTE_house_twin.md);
+// no real work, artist or price. Each work is a Crown-jewel record: no copy-out.
+const ART_FILE = {
+  schema_version: '9.9', generated: '2000-01-01', source: 'made up for tests',
+  protection_tiers: { A: 'tier a', B: 'tier b', C: 'tier c' },
+  works: [
+    { id: 'w-001', title: 'Blue Study', artist: 'Ann Example', medium: 'etching',
+      dimensions_cm: { plate: '10 x 12', sheet: '20 x 24' }, location: 'hall',
+      acquisition: { date: '2000-01-02', price: { total: 1, currency: 'XXX' } } },
+    { id: 'w-002', title: 'Grey Field', artist: 'Bo Sample', location: 'Storeroom' },
+    { id: 'w-003', artist: 'Cy Fixture', exhibitions: ['Show One', 'Show Two'] },
+  ],
+};
+
+async function importArt(t, obj) {
+  const input = t.$('#art-file');
+  const file = new t.w.File([typeof obj === 'string' ? obj : JSON.stringify(obj)], 'artworks.json', { type: 'application/json' });
+  Object.defineProperty(input, 'files', { value: [file], configurable: true });
+  input.dispatchEvent(new t.w.Event('change'));
+  for (let i = 0; i < 50 && !/Imported|isn't/.test(t.$('#status').textContent); i++) await new Promise(r => setTimeout(r, 10));
+}
+
+test('importing the art file makes one art thing per work, placed by its location', async () => {
+  const t = boot({ seed: SEED });
+  await importArt(t, ART_FILE);
+  assert.deepEqual(t.thingsIn('Hall'), ['coat stand', 'Blue Study']);
+  assert.deepEqual(t.thingsIn('Art to place'), ['Grey Field', 'Untitled (Cy Fixture)']);
+  const art = t.stored().things.filter(x => x.kind === 'art');
+  assert.equal(art.length, 3);
+  assert.equal(art[0].art.dimensions_cm.sheet, '20 x 24');   // every field kept
+  assert.equal(t.$('#status').textContent, 'Imported 3 works: 3 new, 0 updated.');
+});
+
+test('importing again updates each work by its id, never duplicates it', async () => {
+  const t = boot();
+  await importArt(t, ART_FILE);
+  t.$('#status').textContent = '';
+  const changed = structuredClone(ART_FILE);
+  changed.works[1].title = 'Grey Field II';
+  await importArt(t, changed);
+  assert.equal(t.stored().things.length, 3);
+  assert.ok(t.stored().things.some(x => x.name === 'Grey Field II'));
+  assert.equal(t.$('#status').textContent, 'Imported 3 works: 0 new, 3 updated.');
+});
+
+test('an import the phone cannot store says so instead of "Imported"', async () => {
+  const t = boot();
+  t.w.Storage.prototype.setItem = () => { throw new Error('quota'); };   // this window only
+  await importArt(t, ART_FILE);
+  for (let i = 0; i < 50 && !t.$('#status').textContent; i++) await new Promise(r => setTimeout(r, 10));
+  assert.equal(t.$('#status').textContent, 'Not saved — this browser is blocking storage.');
+});
+
+test("a file that isn't an art list adds nothing and says so", async () => {
+  for (const bad of ['not json', { spaces: [] }]) {
+    const t = boot();
+    await importArt(t, bad);
+    assert.equal(t.stored(), null);
+    assert.equal(t.$('#status').textContent, "That file isn't an art list (no works in it).");
+  }
+});
+
+test("a work's fields show when it is opened, nested ones by their path", async () => {
+  const t = boot();
+  await importArt(t, ART_FILE);
+  t.open('Blue Study');
+  const rows = t.$$('.edit .fields div').map(e => e.textContent);
+  assert.ok(rows.includes('Artist: Ann Example'));
+  assert.ok(rows.includes('Dimensions cm · sheet: 20 x 24'));
+  assert.ok(rows.includes('Acquisition · price · total: 1'));
+  t.$('.edit [data-act="cancel"]').click();
+  t.open('Untitled (Cy Fixture)');
+  assert.ok(t.$$('.edit .fields div').map(e => e.textContent).includes('Exhibitions: Show One; Show Two'));
+});
+
+test('art has no copy-out: no export, share, clipboard, download or network call in the page', () => {
+  const code = HTML.replace(/<!--[\s\S]*?-->/g, '');
+  for (const door of ['download', 'navigator.share', 'clipboard', 'createObjectURL', 'fetch(', 'XMLHttpRequest', 'sendBeacon', 'WebSocket', 'window.open', 'mailto:'])
+    assert.ok(!code.includes(door), `the page must not contain ${door}`);
+});

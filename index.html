@@ -45,6 +45,9 @@
   .add-thing{display:flex;gap:8px;padding:10px 14px 12px;border-top:1px solid #ecefea;}
   .add-thing select{flex:0 0 auto;}
   .note{font-size:13px;color:var(--graphite);margin:10px 2px 0;}
+  .fields{flex:1 1 100%;font-size:13px;color:var(--graphite);word-break:break-word;}
+  .fields div{padding:2px 0;}
+  label.ghost{display:inline-block;}
   .ver{position:fixed;right:10px;bottom:8px;font-size:11px;color:var(--graphite);opacity:.6;}
   :focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
 </style>
@@ -63,10 +66,13 @@
     <div id="list"></div>
     <p class="note" id="hint"></p>
     <p class="note" id="status"></p>
+    <!-- Lares 3: the art file is read on the phone only; there is no way back out. -->
+    <p class="note"><label class="ghost" for="art-file">Import art file</label>
+      <input type="file" id="art-file" accept=".json,application/json" hidden></p>
   </section>
 </div>
 <!-- Keep in step with CACHE in sw.js — the visible proof of which build is running. -->
-<span class="ver">lares-v5</span>
+<span class="ver">lares-v6</span>
 
 <script>
 // State: one JSON document in localStorage, on one device. No backup, no sync.
@@ -74,7 +80,7 @@
 // kairos_v3/kairos-system/docs/DESIGN_NOTE_house_twin.md). Name, kind and
 // space are enough to save a thing; later stories add the other fields.
 const KEY = 'lares:v1';
-const KINDS = ['appliance', 'furniture', 'fixture', 'other'];
+const KINDS = ['appliance', 'furniture', 'fixture', 'art', 'other'];
 // Say a room (Lares 7): the phone's keyboard turns speech into text; the
 // page only splits it. A kind is guessed from these words, else the
 // space's kind selector (else 'other' for a whole room).
@@ -105,8 +111,8 @@ function load(){
   render();
 }
 function save(){
-  try { localStorage.setItem(KEY, JSON.stringify(state)); $('status').textContent = ''; }
-  catch (e) { $('status').textContent = 'Not saved — this browser is blocking storage.'; }
+  try { localStorage.setItem(KEY, JSON.stringify(state)); $('status').textContent = ''; return true; }
+  catch (e) { $('status').textContent = 'Not saved — this browser is blocking storage.'; return false; }
 }
 function plural(n, one){ return n + ' ' + one + (n === 1 ? '' : 's'); }
 
@@ -119,6 +125,7 @@ function thingRow(t){
     <input data-f="name" value="${esc(t.name)}" autocomplete="off">
     <select data-f="kind">${kindOptions(t.kind)}</select>
     <select data-f="space">${spaces}</select>
+    ${t.art ? `<div class="fields">${artRows(t.art, '').map(([k, v]) => `<div>${esc(k)}: ${esc(v)}</div>`).join('')}</div>` : ''}
     <div class="row-btns">
       <button class="ghost danger" type="button" data-act="delete">Delete</button>
       <button class="ghost" type="button" data-act="cancel">Cancel</button>
@@ -186,6 +193,41 @@ function guessKind(name){
     if (words.some(w => n.includes(' ' + w.replace(/s\b/g, '') + ' '))) return kind;
   return null;
 }
+
+// Lares 3 — the art file (artworks.json: { works: [...] }), imported on the
+// phone. Each work is one thing of kind art with every field kept as it came;
+// a work goes to the space its location names, else to "Art to place". A
+// second import updates by the work's id. Crown jewels: no copy-out exists.
+const ART_SPACE = 'Art to place';
+const fieldLabel = k => k.replace(/_/g, ' ');
+// A work's fields as [label, text] rows; a nested field shows its path.
+function artRows(v, path){
+  if (v == null || v === '') return [];
+  if (Array.isArray(v)) return v.length ? [[path, v.map(x => x && typeof x === 'object'
+    ? Object.entries(x).map(([k, y]) => `${fieldLabel(k)}: ${y}`).join(', ') : String(x)).join('; ')]] : [];
+  if (typeof v === 'object')
+    return Object.entries(v).flatMap(([k, x]) => artRows(x, path ? path + ' · ' + fieldLabel(k) : capital(fieldLabel(k))));
+  return [[path, String(v)]];
+}
+function importArt(text){
+  let works;
+  try { const d = JSON.parse(text); works = Array.isArray(d) ? d : d && d.works; } catch (e) { works = null; }
+  if (!Array.isArray(works) || !works.length) { $('status').textContent = "That file isn't an art list (no works in it)."; return; }
+  let added = 0, updated = 0;
+  for (const w of works) {
+    if (!w || typeof w !== 'object') continue;
+    const name = w.title || `Untitled (${w.artist || 'no artist'})`;
+    const hit = w.id != null && state.things.find(t => t.art && t.art.id === w.id);
+    if (hit) { hit.art = w; hit.name = name; updated++; continue; }   // it keeps the space it was moved to
+    const loc = typeof w.location === 'string' ? w.location.trim().toLowerCase() : '';
+    const sp = state.spaces.find(s => s.name.toLowerCase() === loc) || findOrMakeSpace(ART_SPACE);
+    state.things.push({ id: newId(), name, kind: 'art', space: sp.id, art: w });
+    added++;
+  }
+  render();
+  if (save()) $('status').textContent = `Imported ${plural(added + updated, 'work')}: ${added} new, ${updated} updated.`;
+}
+
 function findOrMakeSpace(name){
   const hit = state.spaces.find(s => s.name.toLowerCase() === name.toLowerCase());
   if (hit) return hit;
@@ -279,6 +321,15 @@ $('list').addEventListener('click', e => {
   }
   const row = e.target.closest('[data-thing]');
   if (row) { editing = row.dataset.thing; render(); }
+});
+
+$('art-file').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => importArt(String(r.result));
+  r.readAsText(f);
+  e.target.value = '';
 });
 
 load();
