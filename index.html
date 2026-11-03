@@ -65,7 +65,7 @@
   </section>
 </div>
 <!-- Keep in step with CACHE in sw.js — the visible proof of which build is running. -->
-<span class="ver">lares-v3</span>
+<span class="ver">lares-v4</span>
 
 <script>
 // State: one JSON document in localStorage, on one device. No backup, no sync.
@@ -85,7 +85,8 @@ const KIND_WORDS = {
   furniture: ['sofa', 'couch', 'chair', 'armchair', 'table', 'desk', 'bed', 'wardrobe', 'dresser', 'shelf',
     'shelves', 'bookcase', 'cabinet', 'stool', 'bench', 'sideboard', 'cupboard', 'chest', 'nightstand', 'rug', 'mirror'],
   fixture: ['sink', 'tap', 'faucet', 'toilet', 'shower', 'bath', 'bathtub', 'radiator', 'light', 'lamp', 'window',
-    'door', 'fireplace', 'thermostat', 'smoke alarm', 'socket', 'switch', 'heater'],
+    'door', 'fireplace', 'thermostat', 'smoke alarm', 'socket', 'switch', 'heater',
+    'lock', 'keypad', 'deadbolt'],   // locks are fixtures until Lares 6 gives them a kind
 };
 let state = { spaces: [], things: [] };
 let editing = null;   // id of the thing whose editor is open
@@ -138,18 +139,39 @@ function render(){
       ${things.map(thingRow).join('')}
       <div class="add-thing">
         <input data-f="new-thing" placeholder="Add things" autocomplete="off" enterkeyhint="done">
-        <select data-f="new-kind" aria-label="Kind">${kindOptions('appliance')}</select>
+        <select data-f="new-kind" aria-label="Kind">${kindOptions('other')}</select>
         <button class="add" type="button" data-act="add-thing">Add</button>
       </div>
     </div>`;
   }).join('');
 }
 
-// "a dishwasher, a fridge and the coffee machine." → three names.
+// "a dishwasher, a fridge and two chairs. They're new." → names
+// ['Dishwasher', 'Fridge', 'Chair 1', 'Chair 2'], skipped ["They're new"].
+// A clause that starts by pointing back ("these are…", "it is…") only
+// describes, so it is skipped and named, never saved as a thing.
+const NUMBERS = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+const COUNT = new RegExp('^(\\d+|' + Object.keys(NUMBERS).join('|') + ')\\s+(.+)$', 'i');
+const MAX_COUNT = 12;   // more than this ("40 books") stays one thing, as said
+const DESCRIBES = /^(?:these|those|they|theyre|it|its|which|both)\b/i;
+const capital = s => s.charAt(0).toUpperCase() + s.slice(1);
+const singular = s => s.replace(/(\S+)$/, w => w
+  .replace(/ies$/i, 'y').replace(/ves$/i, 'f').replace(/(ch|sh|x|ss)es$/i, '$1').replace(/([^su])s$/i, '$1'));
 function splitItems(text){
-  return text.split(/\s*(?:,|;|\n|\band\b|\bplus\b)\s*/i)
-    .map(x => x.trim().replace(/[.!?]+$/, '').replace(/^(?:an?|the|some|one)\s+/i, '').trim())
-    .filter(Boolean);
+  const names = [], skipped = [];
+  for (const part of text.split(/\s*(?:,|;|\n|[.!?]+(?:\s+|$)|\band\b|\bplus\b)\s*/i)) {
+    const said = part.trim().replace(/[.!?]+$/, '');
+    if (!said) continue;
+    if (DESCRIBES.test(said.replace(/'/g, ''))) { skipped.push(said); continue; }
+    const name = said.replace(/^(?:an?|the|some|one)\s+/i, '').trim();
+    const c = name.match(COUNT);
+    const n = c ? Number(NUMBERS[c[1].toLowerCase()] || c[1]) : 1;
+    if (n >= 2 && n <= MAX_COUNT) {
+      const one = capital(singular(c[2]));
+      for (let i = 1; i <= n; i++) names.push(one + ' ' + i);
+    } else names.push(capital(name));
+  }
+  return { names, skipped };
 }
 // "Kitchen has a fridge" / "Kitchen: a fridge" → ['Kitchen', 'a fridge'], else null.
 function splitRoom(text){
@@ -162,7 +184,6 @@ function guessKind(name){
     if (words.some(w => n.includes(' ' + w.replace(/s\b/g, '') + ' '))) return kind;
   return null;
 }
-const capital = s => s.charAt(0).toUpperCase() + s.slice(1);
 function findOrMakeSpace(name){
   const hit = state.spaces.find(s => s.name.toLowerCase() === name.toLowerCase());
   if (hit) return hit;
@@ -170,21 +191,27 @@ function findOrMakeSpace(name){
   state.spaces.push(sp);
   return sp;
 }
+// Adds the things and returns the status line for it.
 function addItems(space, text, fallbackKind){
-  const names = splitItems(text);
+  const { names, skipped } = splitItems(text);
   for (const name of names) state.things.push({ id: newId(), name, kind: guessKind(name) || fallbackKind, space: space.id });
-  return names.length;
+  return `Added ${plural(names.length, 'thing')} to ${space.name}.`
+    + (skipped.length ? ' Skipped: ' + skipped.map(s => `"${s}"`).join(', ') + '.' : '');
 }
 
 function addSpace(){
   const field = $('field'); const text = field.value.trim();
   if (!text) return;
   const room = splitRoom(text);
+  // "5 locks: …" names a count, not a room: add nothing, keep what was said.
+  if (COUNT.test((room ? room[0] : text).replace(/^(?:an?|the)\s+/i, ''))) {
+    $('status').textContent = 'Say a room first: "Hall has a lock".';
+    return;
+  }
   let note = '';
   if (room && room[0]) {
     const sp = findOrMakeSpace(room[0]);
-    const n = addItems(sp, room[1], 'other');
-    note = `Added ${plural(n, 'thing')} to ${sp.name}.`;
+    note = addItems(sp, room[1], 'other');
   } else {
     findOrMakeSpace(text.replace(/[.!?]+$/, ''));
   }
@@ -197,9 +224,10 @@ function addThing(spaceEl){
   if (!input.value.trim()) return;
   const kind = spaceEl.querySelector('[data-f="new-kind"]').value;
   const space = state.spaces.find(s => s.id === spaceEl.dataset.space);
-  const n = addItems(space, input.value, kind);
+  const before = state.things.length;
+  const note = addItems(space, input.value, kind);
   render(); save();
-  if (n > 1) $('status').textContent = `Added ${plural(n, 'thing')} to ${space.name}.`;
+  if (state.things.length - before > 1 || note.includes('Skipped')) $('status').textContent = note;
   // Keep the cursor in this space's field: several things in a row, in seconds.
   const again = document.querySelector(`[data-space="${space.id}"] [data-f="new-thing"]`);
   if (again) again.focus();
