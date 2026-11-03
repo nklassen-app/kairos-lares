@@ -24,7 +24,8 @@ function boot({ seed = {}, confirmAnswer = true } = {}) {
     pretendToBeVisual: true,
     beforeParse(window) {
       for (const [k, v] of Object.entries(seed)) window.localStorage.setItem(k, JSON.stringify(v));
-      window.confirm = () => confirmAnswer;
+      window.asked = [];
+      window.confirm = m => { window.asked.push(m); return confirmAnswer; };
     },
   });
   const w = dom.window;
@@ -116,14 +117,39 @@ test('deleting a thing asks first', () => {
   assert.equal(gone.stored().things.length, 1);
 });
 
-test('only an empty space can be removed', () => {
-  const { space, stored, $$ } = boot({ seed: SEED });
-  assert.equal(space('Hall').querySelector('[data-act="drop-space"]'), null);
+test('an empty space is removed without asking', () => {
   const t = boot({ seed: { [KEY]: { spaces: [{ id: 's9', name: 'Attic' }], things: [] } } });
   t.space('Attic').querySelector('[data-act="drop-space"]').click();
   assert.deepEqual(t.stored().spaces, []);
-  assert.equal($$('.space').length, 2);
-  assert.equal(stored().spaces.length, 2);
+  assert.deepEqual(t.w.asked, []);
+});
+
+// N., 2026-11-03: a space with things in it must be deletable too.
+test('a space with things is removed with them, after a confirm that names the count', () => {
+  const kept = boot({ seed: SEED, confirmAnswer: false });
+  kept.space('Hall').querySelector('[data-act="drop-space"]').click();
+  assert.deepEqual(kept.w.asked, ['Delete Hall and its 1 thing?']);
+  assert.deepEqual(kept.stored(), SEED[KEY]);   // declined: nothing changed
+  assert.deepEqual(kept.thingsIn('Hall'), ['coat stand']);
+
+  const gone = boot({ seed: SEED });
+  gone.space('Hall').querySelector('[data-act="drop-space"]').click();
+  assert.deepEqual(gone.$$('.space-name').map(e => e.textContent), ['Cellar']);
+  assert.deepEqual(gone.stored().spaces.map(s => s.name), ['Cellar']);
+  assert.deepEqual(gone.stored().things.map(t => t.name), ['the boiler']);
+});
+
+test('every space shows its remove button', () => {
+  const { $$ } = boot({ seed: SEED });
+  assert.equal($$('.space [data-act="drop-space"]').length, 2);
+});
+
+test('the page says a thing can be tapped, once there is one', () => {
+  const empty = boot();
+  empty.addSpace('Attic');
+  assert.equal(empty.$('#hint').textContent, '');
+  const { $ } = boot({ seed: SEED });
+  assert.equal($('#hint').textContent, 'Tap a thing to rename, move or delete it.');
 });
 
 test('names are shown as text, never as markup', () => {
