@@ -338,3 +338,105 @@ test('art has no copy-out: no export, share, clipboard, download or network call
   for (const door of ['download', 'navigator.share', 'clipboard', 'createObjectURL', 'fetch(', 'XMLHttpRequest', 'sendBeacon', 'WebSocket', 'window.open', 'mailto:'])
     assert.ok(!code.includes(door), `the page must not contain ${door}`);
 });
+
+// ---- Lares 2: what each thing needs, and what's due across the house ----
+// Dates are relative to today, so the suite runs on any day. Made-up vendors.
+const iso = offsetDays => {
+  const x = new Date(); x.setDate(x.getDate() + offsetDays);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+};
+const NEEDS = () => ({
+  [KEY]: {
+    spaces: [{ id: 's1', name: 'Hall' }, { id: 's2', name: 'Cellar' }],
+    things: [
+      { id: 't1', name: 'Boiler', kind: 'appliance', space: 's2',
+        needs: [{ id: 'n1', what: 'service', every: 52, unit: 'weeks', who: 'Acme Heating', last: iso(-400) }] },
+      { id: 't2', name: 'Coat stand', kind: 'furniture', space: 's1' },
+      { id: 't3', name: 'Fridge', kind: 'appliance', space: 's1',
+        needs: [{ id: 'n3', what: 'clean coils', every: 4, unit: 'weeks', who: 'me', last: iso(-20) }] },
+      { id: 't4', name: 'Dryer', kind: 'appliance', space: 's2',
+        needs: [{ id: 'n4', what: 'clean vent', every: 1, unit: 'years', who: 'me', last: iso(-30) }] },
+      { id: 't5', name: 'Lamp', kind: 'fixture', space: 's1',
+        needs: [{ id: 'n5', what: 'bulb check', every: 3, unit: 'months', who: '' }] },
+    ],
+  },
+});
+const dueRows = t => t.$$('#due .due-row').map(r => [r.querySelector('.due-what').textContent, r.querySelector('.due-when').textContent]);
+
+test("the due list shows what's never done, overdue or due within two weeks, soonest first", () => {
+  const t = boot({ seed: NEEDS() });
+  assert.deepEqual(dueRows(t), [
+    ['Lamp · bulb check', 'never done'],
+    ['Boiler · service', 'overdue 36 days'],
+    ['Fridge · clean coils', 'due in 8 days'],
+  ]);
+  assert.match(t.$$('#due .due-row')[1].textContent, /Cellar/);
+  assert.match(t.$$('#due .due-row')[1].textContent, /Acme Heating/);
+});
+
+test('nothing due, no due list', () => {
+  const { $ } = boot({ seed: SEED });
+  assert.equal($('#due').textContent, '');
+});
+
+test('Done marks a need done today and takes it off the due list', () => {
+  const t = boot({ seed: NEEDS() });
+  t.$$('#due .due-row')[1].querySelector('[data-act="need-done"]').click();
+  assert.equal(t.stored().things[0].needs[0].last, iso(0));
+  assert.deepEqual(dueRows(t).map(r => r[0]), ['Lamp · bulb check', 'Fridge · clean coils']);
+});
+
+test("a need is added in the thing's editor: what, how often, who", () => {
+  const t = boot({ seed: NEEDS() });
+  t.open('Coat stand');
+  const ed = t.$('.edit');
+  ed.querySelector('[data-f="need-what"]').value = 'tighten screws';
+  ed.querySelector('[data-f="need-every"]').value = '6';
+  ed.querySelector('[data-f="need-unit"]').value = 'months';
+  ed.querySelector('[data-f="need-who"]').value = 'me';
+  ed.querySelector('[data-act="need-add"]').click();
+  const n = t.stored().things[1].needs[0];
+  assert.deepEqual([n.what, n.every, n.unit, n.who, n.last], ['tighten screws', 6, 'months', 'me', undefined]);
+  assert.ok(t.$('.edit'));   // the editor stays open
+  assert.deepEqual(t.$$('.edit .need').map(e => e.querySelector('.need-text').textContent), ['tighten screws · every 6 months · me']);
+  assert.ok(dueRows(t).some(r => r[0] === 'Coat stand · tighten screws'));
+});
+
+test('a need without a what, or without a whole number for how often, is not added', () => {
+  const t = boot({ seed: NEEDS() });
+  t.open('Coat stand');
+  const ed = t.$('.edit');
+  ed.querySelector('[data-f="need-every"]').value = '3';
+  ed.querySelector('[data-act="need-add"]').click();
+  ed.querySelector('[data-f="need-what"]').value = 'oil';
+  ed.querySelector('[data-f="need-every"]').value = '0';
+  t.$('.edit [data-act="need-add"]').click();
+  assert.equal(t.stored().things[1].needs, undefined);   // neither was added
+});
+
+test('a need is removed from the editor', () => {
+  const t = boot({ seed: NEEDS() });
+  t.open('Boiler');
+  t.$('.edit [data-act="need-drop"]').click();
+  assert.deepEqual(t.stored().things[0].needs, []);
+  assert.ok(!dueRows(t).some(r => r[0].startsWith('Boiler')));
+});
+
+test('repair facts are saved with the thing; the manual is a link only when it is a web address', () => {
+  const t = boot({ seed: NEEDS() });
+  t.open('Fridge');
+  const ed = t.$('.edit');
+  ed.querySelector('[data-f="repair-manual"]').value = 'https://example.com/fridge-manual.pdf';
+  ed.querySelector('[data-f="repair-codes"]').value = 'E1: door open';
+  ed.querySelector('[data-f="repair-parts"]').value = 'filter F-1';
+  ed.querySelector('[data-f="repair-warranty"]').value = '2030-01-31';
+  ed.querySelector('[data-act="save"]').click();
+  assert.deepEqual(t.stored().things[2].repair,
+    { manual: 'https://example.com/fridge-manual.pdf', codes: 'E1: door open', parts: 'filter F-1', warranty: '2030-01-31' });
+  t.open('Fridge');
+  assert.equal(t.$('.edit a.manual').getAttribute('href'), 'https://example.com/fridge-manual.pdf');
+  t.$('.edit [data-f="repair-manual"]').value = 'javascript:alert(1)';
+  t.$('.edit [data-act="save"]').click();
+  t.open('Fridge');
+  assert.equal(t.$('.edit a.manual'), null);
+});

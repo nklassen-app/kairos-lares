@@ -36,7 +36,13 @@ from `kairos-foundation/templates/phone-app`.
    work goes to the space its `location` names, else to "Art to place"; a
    second import updates each work by its `id`. The art list is Crown jewels:
    it lives in this phone's browser only, and its tests use made-up works.
-6. State is one JSON document in `localStorage` under `lares:v1`, on one
+6. What each thing needs (Lares 2): a thing's editor holds its needs (what,
+   every N days/weeks/months/years, who does it) and its repair facts
+   (manual link, error codes, parts, warranty end). The due list at the top
+   shows every need that was never done, is overdue, or falls due within 14
+   days, soonest first; "Done" marks it done today. The manual is a link only
+   when it is a web address.
+7. State is one JSON document in `localStorage` under `lares:v1`, on one
    device. No backup, no sync.
 
 ## Run locally
