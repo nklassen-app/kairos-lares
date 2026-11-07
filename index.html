@@ -48,6 +48,10 @@
   .fields{flex:1 1 100%;font-size:13px;color:var(--graphite);word-break:break-word;}
   .fields div{padding:2px 0;}
   label.ghost{display:inline-block;}
+  .importbox{margin:12px 2px 0;}
+  .importbox summary{font-size:13px;font-weight:600;color:var(--graphite);cursor:pointer;padding:4px 0;}
+  .importbox textarea{display:block;width:100%;margin:6px 0 8px;font:inherit;font-size:14px;padding:9px 12px;border:1.5px solid var(--edge);border-radius:8px;background:#fff;color:var(--ink);resize:vertical;}
+  .importbox .add{padding:10px 16px;}
   #due:not(:empty){border:1.5px solid var(--edge);border-radius:10px;background:#fff;margin-bottom:14px;}
   .due-head{font-size:15px;font-weight:650;margin:0;padding:12px 14px 6px;}
   .due-row{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:10px 14px;border-top:1px solid #ecefea;}
@@ -88,10 +92,15 @@
     <!-- Lares 3: the art file is read on the phone only; there is no way back out. -->
     <p class="note"><label class="ghost" for="art-file">Import art file</label>
       <input type="file" id="art-file" accept=".json,application/json" hidden></p>
+    <!-- Lares 9: an import list drafted in a session (spaces → things → needs), pasted here. -->
+    <details class="importbox"><summary>Import a list</summary>
+      <textarea id="import-text" rows="4" placeholder="Paste an import list drafted in a session" autocomplete="off"></textarea>
+      <button class="add" id="import-go" type="button">Import</button>
+    </details>
   </section>
 </div>
 <!-- Keep in step with CACHE in sw.js — the visible proof of which build is running. -->
-<span class="ver">lares-v7</span>
+<span class="ver">lares-v8</span>
 
 <script>
 // State: one JSON document in localStorage, on one device. No backup, no sync.
@@ -189,22 +198,37 @@ function nextDue(n){
   return d;
 }
 const needText = n => `${n.what} · every ${n.every === 1 ? n.unit.replace(/s$/, '') : n.every + ' ' + n.unit}${n.who ? ' · ' + n.who : ''}`;
-function whenText(days){
-  if (days === -Infinity) return 'never done';
-  if (days < 0) return `overdue ${plural(-days, 'day')}`;
-  return days === 0 ? 'due today' : `due in ${plural(days, 'day')}`;
+// When a need stands. In days or weeks it falls on a day. In months or years
+// it falls in a month (N., 2026-11-07): due during that whole month, overdue
+// only from the 1st of the next, and shown from DUE_AHEAD days before the
+// month starts. `key` sorts the list: days left until it becomes overdue.
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const DAY = 86400000;
+function standing(n, today){
+  const due = nextDue(n);
+  if (!due) return { key: -Infinity, show: true, late: false, text: 'never done' };
+  if (n.unit === 'days' || n.unit === 'weeks') {
+    const days = Math.round((due - today) / DAY);
+    return { key: days, show: days <= DUE_AHEAD, late: days < 0,
+      text: days < 0 ? `overdue ${plural(-days, 'day')}` : days === 0 ? 'due today' : `due in ${plural(days, 'day')}` };
+  }
+  const start = new Date(due.getFullYear(), due.getMonth(), 1);
+  const end = new Date(due.getFullYear(), due.getMonth() + 1, 1);
+  const name = MONTH_NAMES[start.getMonth()] + (start.getFullYear() === today.getFullYear() ? '' : ' ' + start.getFullYear());
+  const key = Math.round((end - today) / DAY) - 1;
+  if (today >= end) return { key, show: true, late: true, text: `overdue since ${name}` };
+  if (today >= start) return { key, show: true, late: false, text: 'due this month' };
+  return { key, show: Math.round((start - today) / DAY) <= DUE_AHEAD, late: false, text: `due in ${name}` };
 }
 function renderDue(){
   const today = dayOf(isoDate(new Date()));
-  const items = state.things.flatMap(t => (t.needs || []).map(n => {
-    const due = nextDue(n);
-    return { t, n, days: due ? Math.round((due - today) / 86400000) : -Infinity };
-  })).filter(x => x.days <= DUE_AHEAD).sort((a, b) => a.days - b.days);
-  $('due').innerHTML = items.length ? '<h2 class="due-head">Due</h2>' + items.map(({ t, n, days }) => {
-    const sp = state.spaces.find(s => s.id === t.space);
+  const items = state.things.flatMap(t => (t.needs || []).map(n => ({ t, n, s: standing(n, today) })))
+    .filter(x => x.s.show).sort((a, b) => a.s.key - b.s.key);
+  $('due').innerHTML = items.length ? '<h2 class="due-head">Due</h2>' + items.map(({ t, n, s }) => {
+    const sp = state.spaces.find(x => x.id === t.space);
     return `<div class="due-row" data-due-thing="${t.id}" data-need="${n.id}">
       <div class="due-main"><span class="due-what">${esc(t.name)} · ${esc(n.what)}</span>
-        <span class="due-when${days < 0 && days !== -Infinity ? ' late' : ''}">${whenText(days)}</span></div>
+        <span class="due-when${s.late ? ' late' : ''}">${s.text}</span></div>
       <div class="due-sub">${esc(sp ? sp.name : '')}${n.who ? ' · ' + esc(n.who) : ''}</div>
       <button class="ghost" type="button" data-act="need-done">Done</button>
     </div>`;
@@ -426,6 +450,57 @@ $('list').addEventListener('click', e => {
   }
   const row = e.target.closest('[data-thing]');
   if (row) { editing = row.dataset.thing; render(); }
+});
+
+// Lares 9 — an import list, drafted in a session and pasted here:
+// { spaces: [{ name, things: [{ name, kind?, needs?: [{ what, every, unit, who?, last? }], repair? }] }] }.
+// Spaces and things are matched by name (any case), needs by what; nothing is
+// ever duplicated, so pasting a list twice changes nothing. A new thing takes
+// the kind given (never art: art comes only from the art file) or a guessed
+// one; a matched need takes the new how-often and who but keeps when it was
+// last done unless the list says. Art records are never touched.
+const REPAIR_FIELDS = ['manual', 'codes', 'parts', 'warranty'];
+const same = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+function importList(text){
+  let d = null;
+  try { d = JSON.parse(text); } catch (e) {}
+  if (!d || !Array.isArray(d.spaces) || !d.spaces.length) { $('status').textContent = "That isn't an import list (no spaces in it)."; return false; }
+  const c = { spaces: 0, things: 0, added: 0, updated: 0, skipped: 0 };
+  for (const s of d.spaces) {
+    if (!s || typeof s.name !== 'string' || !s.name.trim()) continue;
+    let sp = state.spaces.find(x => same(x.name, s.name));
+    if (!sp) { sp = findOrMakeSpace(s.name.trim()); c.spaces++; }
+    for (const th of Array.isArray(s.things) ? s.things : []) {
+      if (!th || typeof th.name !== 'string' || !th.name.trim()) continue;
+      let t = state.things.find(x => x.space === sp.id && same(x.name, th.name));
+      if (!t) {
+        const kind = KINDS.includes(th.kind) && th.kind !== 'art' ? th.kind : guessKind(th.name) || 'other';
+        t = { id: newId(), name: th.name.trim(), kind, space: sp.id };
+        state.things.push(t); c.things++;
+      }
+      for (const n of Array.isArray(th.needs) ? th.needs : []) {
+        const what = n && typeof n.what === 'string' ? n.what.trim() : '';
+        if (!what || !Number.isInteger(n.every) || n.every < 1 || !UNITS.includes(n.unit)) { c.skipped++; continue; }
+        const last = typeof n.last === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(n.last) ? n.last : undefined;
+        const who = typeof n.who === 'string' ? n.who.trim() : '';
+        const hit = (t.needs || []).find(x => same(x.what, what));
+        if (hit) { Object.assign(hit, { every: n.every, unit: n.unit, who }); if (last) hit.last = last; c.updated++; }
+        else { (t.needs = t.needs || []).push({ id: newId(), what, every: n.every, unit: n.unit, who, ...(last ? { last } : {}) }); c.added++; }
+      }
+      if (th.repair && typeof th.repair === 'object') {
+        const r = Object.fromEntries(REPAIR_FIELDS.filter(k => typeof th.repair[k] === 'string' && th.repair[k].trim()).map(k => [k, th.repair[k].trim()]));
+        if (Object.keys(r).length) t.repair = { ...(t.repair || {}), ...r };
+      }
+    }
+  }
+  render();
+  if (!save()) return false;   // "Not saved" stands, and the text stays in the box
+  $('status').textContent = `Imported ${plural(c.added + c.updated, 'need')} (${c.added} new, ${c.updated} updated) · ${plural(c.things, 'new thing')} · ${plural(c.spaces, 'new space')}.`
+    + (c.skipped ? ` Skipped ${plural(c.skipped, 'need')} (no what, or no whole-number how often in days, weeks, months or years).` : '');
+  return true;
+}
+$('import-go').addEventListener('click', () => {
+  if (importList($('import-text').value)) $('import-text').value = '';
 });
 
 $('art-file').addEventListener('change', e => {

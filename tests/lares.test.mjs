@@ -374,6 +374,31 @@ test("the due list shows what's never done, overdue or due within two weeks, soo
   assert.match(t.$$('#due .due-row')[1].textContent, /Acme Heating/);
 });
 
+// N., 2026-11-07: a need in months or years is due during its whole month and
+// is overdue only from the next month on. Days and weeks keep their exact day.
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const firstOf = (monthsFromNow, yearsBack = 0) => {
+  const x = new Date(); x.setDate(1); x.setMonth(x.getMonth() + monthsFromNow); x.setFullYear(x.getFullYear() - yearsBack);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-01`;
+};
+const monthName = monthsFromNow => {   // with its year when that isn't this year
+  const x = new Date(); x.setDate(1); x.setMonth(x.getMonth() + monthsFromNow);
+  return MONTH_NAMES[x.getMonth()] + (x.getFullYear() === new Date().getFullYear() ? '' : ' ' + x.getFullYear());
+};
+const yearly = (id, what, last) => ({ id, name: what, kind: 'other', space: 's1', needs: [{ id: 'n' + id, what: 'check', every: 1, unit: 'years', who: '', last }] });
+
+test('a need in months or years is due during its whole month, and overdue only from the next month', () => {
+  const t = boot({ seed: { [KEY]: { spaces: [{ id: 's1', name: 'Garden' }], things: [
+    yearly('a', 'Due this month', firstOf(0, 1)),        // fell due on the 1st of this month: not overdue
+    yearly('b', 'Due last month', firstOf(-1, 1)),       // its month is over: overdue
+    yearly('c', 'Due in two months', firstOf(2, 1)),     // too far ahead to show
+  ] } } });
+  assert.deepEqual(dueRows(t), [
+    ['Due last month · check', `overdue since ${monthName(-1)}`],
+    ['Due this month · check', 'due this month'],
+  ]);
+});
+
 test('nothing due, no due list', () => {
   const { $ } = boot({ seed: SEED });
   assert.equal($('#due').textContent, '');
@@ -439,4 +464,105 @@ test('repair facts are saved with the thing; the manual is a link only when it i
   t.$('.edit [data-act="save"]').click();
   t.open('Fridge');
   assert.equal(t.$('.edit a.manual'), null);
+});
+
+// ---- Lares 9: an import list (spaces → things → needs), pasted on the phone ----
+// The list is drafted in a session (from Domus's "Export for agent", or from
+// appliance manuals) and pasted here. Made-up rooms, things and vendors only.
+function pasteImport(t, obj) {
+  t.$('#import-text').value = typeof obj === 'string' ? obj : JSON.stringify(obj);
+  t.$('#import-go').click();
+}
+const LIST = {
+  lares_import: 1,
+  spaces: [
+    { name: 'hall', things: [
+      { name: 'Coat stand', needs: [{ what: 'tighten screws', every: 12, unit: 'months', who: 'me' }] },
+      { name: 'Doormat', kind: 'furniture', needs: [{ what: 'replace', every: 2, unit: 'years', who: 'me', last: '2025-05-01' }] },
+    ] },
+    { name: 'Utility room', things: [
+      { name: 'Water softener', kind: 'appliance',
+        needs: [{ what: 'add salt', every: 6, unit: 'weeks', who: 'Example Water Co' }],
+        repair: { manual: 'https://example.com/softener.pdf', codes: 'E3: low salt' } },
+    ] },
+  ],
+};
+
+test('an import list adds spaces, things and needs, matching existing ones by name', () => {
+  const t = boot({ seed: SEED });
+  pasteImport(t, LIST);
+  assert.deepEqual(t.$$('.space-name').map(e => e.textContent), ['Hall', 'Cellar', 'Utility room']);
+  assert.deepEqual(t.thingsIn('Hall'), ['coat stand', 'Doormat']);   // the existing coat stand is reused
+  const things = t.stored().things;
+  const stand = things.find(x => x.id === 't2');
+  assert.deepEqual(stand.needs.map(n => [n.what, n.every, n.unit, n.who]), [['tighten screws', 12, 'months', 'me']]);
+  const doormat = things.find(x => x.name === 'Doormat');
+  assert.equal(doormat.kind, 'furniture');
+  assert.equal(doormat.needs[0].last, '2025-05-01');
+  const softener = things.find(x => x.name === 'Water softener');
+  assert.deepEqual(softener.repair, { manual: 'https://example.com/softener.pdf', codes: 'E3: low salt' });
+  assert.equal(t.$('#status').textContent, 'Imported 3 needs (3 new, 0 updated) · 2 new things · 1 new space.');
+  assert.equal(t.$('#import-text').value, '');   // the box is cleared once it is in
+});
+
+test('importing the same list again changes nothing and adds nothing', () => {
+  const t = boot({ seed: SEED });
+  pasteImport(t, LIST);
+  const before = JSON.stringify(t.stored());
+  pasteImport(t, LIST);
+  const after = t.stored();
+  assert.equal(after.things.length, JSON.parse(before).things.length);
+  assert.equal(after.spaces.length, 3);
+  assert.equal(t.$('#status').textContent, 'Imported 3 needs (0 new, 3 updated) · 0 new things · 0 new spaces.');
+});
+
+test('a need is matched by what it is: a second import updates how often and who, and keeps when it was done', () => {
+  const t = boot({ seed: SEED });
+  pasteImport(t, LIST);
+  t.$$('#due .due-row').find(r => /tighten screws/.test(r.textContent)).querySelector('[data-act="need-done"]').click();
+  const changed = structuredClone(LIST);
+  changed.spaces[0].things[0].needs[0] = { what: 'Tighten Screws', every: 6, unit: 'months', who: 'Example Handyman' };
+  pasteImport(t, changed);
+  const n = t.stored().things.find(x => x.id === 't2').needs;
+  assert.equal(n.length, 1);
+  assert.deepEqual([n[0].every, n[0].who], [6, 'Example Handyman']);
+  assert.ok(n[0].last);   // the Done from the phone stands
+});
+
+test('a need without a what or a whole-number how often is skipped and counted', () => {
+  const t = boot();
+  pasteImport(t, { lares_import: 1, spaces: [{ name: 'Attic', things: [{ name: 'Fan', needs: [
+    { what: 'clean', every: 3, unit: 'months' },
+    { what: '', every: 3, unit: 'months' },
+    { what: 'oil', every: 0, unit: 'months' },
+    { what: 'check', every: 2, unit: 'fortnights' },
+    { what: 'dust', every: 1, unit: 'weeks', last: 'last spring' },
+  ] }] }] });
+  const needs = t.stored().things[0].needs;
+  assert.deepEqual(needs.map(n => n.what), ['clean', 'dust']);
+  assert.equal(needs[1].last, undefined);   // a date that isn't YYYY-MM-DD is dropped
+  assert.equal(t.$('#status').textContent, 'Imported 2 needs (2 new, 0 updated) · 1 new thing · 1 new space. Skipped 3 needs (no what, or no whole-number how often in days, weeks, months or years).');
+});
+
+test("text that isn't an import list adds nothing and says so", () => {
+  for (const bad of ['not json', '{"works": []}', '{"spaces": []}']) {
+    const t = boot();
+    pasteImport(t, bad);
+    assert.equal(t.stored(), null, bad);
+    assert.equal(t.$('#status').textContent, "That isn't an import list (no spaces in it).");
+    assert.equal(t.$('#import-text').value, bad);   // kept, so it can be fixed
+  }
+});
+
+test('an import never makes art and never touches an art record', async () => {
+  const t = boot();
+  await importArt(t, ART_FILE);
+  const art = structuredClone(t.stored().things[0].art);
+  pasteImport(t, { lares_import: 1, spaces: [{ name: 'Hall', things: [
+    { name: 'Blue Study', needs: [{ what: 'check frame', every: 1, unit: 'years' }] },
+    { name: 'New Print', kind: 'art' },
+  ] }] });
+  const things = t.stored().things;
+  assert.deepEqual(things.find(x => x.name === 'Blue Study').art, art);
+  assert.equal(things.find(x => x.name === 'New Print').kind, 'other');
 });
