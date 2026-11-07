@@ -42,7 +42,14 @@ from `kairos-foundation/templates/phone-app`.
    shows every need that was never done, is overdue, or falls due within 14
    days, soonest first; "Done" marks it done today. The manual is a link only
    when it is a web address.
-7. State is one JSON document in `localStorage` under `lares:v1`, on one
+7. An import list (Lares 9): "Import a list" takes a JSON list drafted in a
+   session, `{ spaces: [{ name, things: [{ name, kind, needs: [{ what, every,
+   unit, who, last }], repair }] }] }`. Spaces and things are matched by name
+   (any case) and needs by what, so nothing is duplicated and pasting twice
+   changes nothing; a matched need keeps when it was last done unless the
+   list says. An import never makes art or touches an art record. The lists
+   themselves hold the house's things, so they are never committed.
+8. State is one JSON document in `localStorage` under `lares:v1`, on one
    device. No backup, no sync.
 
 ## Run locally
