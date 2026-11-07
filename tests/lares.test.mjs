@@ -374,6 +374,31 @@ test("the due list shows what's never done, overdue or due within two weeks, soo
   assert.match(t.$$('#due .due-row')[1].textContent, /Acme Heating/);
 });
 
+// N., 2026-11-07: a need in months or years is due during its whole month and
+// is overdue only from the next month on. Days and weeks keep their exact day.
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const firstOf = (monthsFromNow, yearsBack = 0) => {
+  const x = new Date(); x.setDate(1); x.setMonth(x.getMonth() + monthsFromNow); x.setFullYear(x.getFullYear() - yearsBack);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-01`;
+};
+const monthName = monthsFromNow => {   // with its year when that isn't this year
+  const x = new Date(); x.setDate(1); x.setMonth(x.getMonth() + monthsFromNow);
+  return MONTH_NAMES[x.getMonth()] + (x.getFullYear() === new Date().getFullYear() ? '' : ' ' + x.getFullYear());
+};
+const yearly = (id, what, last) => ({ id, name: what, kind: 'other', space: 's1', needs: [{ id: 'n' + id, what: 'check', every: 1, unit: 'years', who: '', last }] });
+
+test('a need in months or years is due during its whole month, and overdue only from the next month', () => {
+  const t = boot({ seed: { [KEY]: { spaces: [{ id: 's1', name: 'Garden' }], things: [
+    yearly('a', 'Due this month', firstOf(0, 1)),        // fell due on the 1st of this month: not overdue
+    yearly('b', 'Due last month', firstOf(-1, 1)),       // its month is over: overdue
+    yearly('c', 'Due in two months', firstOf(2, 1)),     // too far ahead to show
+  ] } } });
+  assert.deepEqual(dueRows(t), [
+    ['Due last month · check', `overdue since ${monthName(-1)}`],
+    ['Due this month · check', 'due this month'],
+  ]);
+});
+
 test('nothing due, no due list', () => {
   const { $ } = boot({ seed: SEED });
   assert.equal($('#due').textContent, '');

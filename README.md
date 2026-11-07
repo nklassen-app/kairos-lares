@@ -40,7 +40,11 @@ from `kairos-foundation/templates/phone-app`.
    every N days/weeks/months/years, who does it) and its repair facts
    (manual link, error codes, parts, warranty end). The due list at the top
    shows every need that was never done, is overdue, or falls due within 14
-   days, soonest first; "Done" marks it done today. The manual is a link only
+   days, soonest first; "Done" marks it done today. A need in months or years
+   falls in a month (N., 2026-11-07): it is "due this month" for that whole
+   month and "overdue since <month>" only from the 1st of the next, and shows
+   from 14 days before its month starts. A need in days or weeks falls on a
+   day. The manual is a link only
    when it is a web address.
 7. An import list (Lares 9): "Import a list" takes a JSON list drafted in a
    session, `{ spaces: [{ name, things: [{ name, kind, needs: [{ what, every,

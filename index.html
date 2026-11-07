@@ -198,22 +198,37 @@ function nextDue(n){
   return d;
 }
 const needText = n => `${n.what} · every ${n.every === 1 ? n.unit.replace(/s$/, '') : n.every + ' ' + n.unit}${n.who ? ' · ' + n.who : ''}`;
-function whenText(days){
-  if (days === -Infinity) return 'never done';
-  if (days < 0) return `overdue ${plural(-days, 'day')}`;
-  return days === 0 ? 'due today' : `due in ${plural(days, 'day')}`;
+// When a need stands. In days or weeks it falls on a day. In months or years
+// it falls in a month (N., 2026-11-07): due during that whole month, overdue
+// only from the 1st of the next, and shown from DUE_AHEAD days before the
+// month starts. `key` sorts the list: days left until it becomes overdue.
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const DAY = 86400000;
+function standing(n, today){
+  const due = nextDue(n);
+  if (!due) return { key: -Infinity, show: true, late: false, text: 'never done' };
+  if (n.unit === 'days' || n.unit === 'weeks') {
+    const days = Math.round((due - today) / DAY);
+    return { key: days, show: days <= DUE_AHEAD, late: days < 0,
+      text: days < 0 ? `overdue ${plural(-days, 'day')}` : days === 0 ? 'due today' : `due in ${plural(days, 'day')}` };
+  }
+  const start = new Date(due.getFullYear(), due.getMonth(), 1);
+  const end = new Date(due.getFullYear(), due.getMonth() + 1, 1);
+  const name = MONTH_NAMES[start.getMonth()] + (start.getFullYear() === today.getFullYear() ? '' : ' ' + start.getFullYear());
+  const key = Math.round((end - today) / DAY) - 1;
+  if (today >= end) return { key, show: true, late: true, text: `overdue since ${name}` };
+  if (today >= start) return { key, show: true, late: false, text: 'due this month' };
+  return { key, show: Math.round((start - today) / DAY) <= DUE_AHEAD, late: false, text: `due in ${name}` };
 }
 function renderDue(){
   const today = dayOf(isoDate(new Date()));
-  const items = state.things.flatMap(t => (t.needs || []).map(n => {
-    const due = nextDue(n);
-    return { t, n, days: due ? Math.round((due - today) / 86400000) : -Infinity };
-  })).filter(x => x.days <= DUE_AHEAD).sort((a, b) => a.days - b.days);
-  $('due').innerHTML = items.length ? '<h2 class="due-head">Due</h2>' + items.map(({ t, n, days }) => {
-    const sp = state.spaces.find(s => s.id === t.space);
+  const items = state.things.flatMap(t => (t.needs || []).map(n => ({ t, n, s: standing(n, today) })))
+    .filter(x => x.s.show).sort((a, b) => a.s.key - b.s.key);
+  $('due').innerHTML = items.length ? '<h2 class="due-head">Due</h2>' + items.map(({ t, n, s }) => {
+    const sp = state.spaces.find(x => x.id === t.space);
     return `<div class="due-row" data-due-thing="${t.id}" data-need="${n.id}">
       <div class="due-main"><span class="due-what">${esc(t.name)} · ${esc(n.what)}</span>
-        <span class="due-when${days < 0 && days !== -Infinity ? ' late' : ''}">${whenText(days)}</span></div>
+        <span class="due-when${s.late ? ' late' : ''}">${s.text}</span></div>
       <div class="due-sub">${esc(sp ? sp.name : '')}${n.who ? ' · ' + esc(n.who) : ''}</div>
       <button class="ghost" type="button" data-act="need-done">Done</button>
     </div>`;
