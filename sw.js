@@ -1,4 +1,4 @@
-const CACHE = 'lares-v8';   // the import list (Lares 9)  // bump on EVERY content change, and the .ver marker in index.html with it
+const CACHE = 'lares-v9';   // a proper app (Lares 11b)  // bump on EVERY content change, and the .ver marker in index.html with it
 const ASSETS = ['.', 'index.html', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', e => {

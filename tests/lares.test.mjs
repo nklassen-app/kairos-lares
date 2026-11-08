@@ -566,3 +566,122 @@ test('an import never makes art and never touches an art record', async () => {
   assert.deepEqual(things.find(x => x.name === 'Blue Study').art, art);
   assert.equal(things.find(x => x.name === 'New Print').kind, 'other');
 });
+
+// ---- Lares 11b: a proper app (N.'s choices in docs/DESIGN_11a.md: Hearth,
+// compact, sans, Due first; three tabs; a page per space and per thing) ----
+const view = t => t.w.document.body.dataset.view;
+const tap = (t, sel) => t.$(sel).click();
+
+test('it opens on Due, and the three tabs switch the view', () => {
+  const t = boot({ seed: SEED });
+  assert.equal(view(t), 'due');
+  assert.deepEqual(t.$$('#tabs [data-tab]').map(b => b.textContent.trim()), ['Due', 'Spaces', 'Art']);
+  tap(t, '[data-tab="spaces"]');
+  assert.equal(view(t), 'spaces');
+  assert.equal(t.$('#tabs [aria-current="page"]').dataset.tab, 'spaces');
+  tap(t, '[data-tab="art"]');
+  assert.equal(view(t), 'art');
+});
+
+test('Spaces shows a tile per space; a tile opens that space, a thing opens its page, back returns', () => {
+  const t = boot({ seed: SEED });
+  tap(t, '[data-tab="spaces"]');
+  assert.deepEqual(t.$$('#tiles [data-tile]').map(e => e.querySelector('.tile-name').textContent), ['Hall', 'Cellar']);
+  t.$$('#tiles [data-tile]')[1].click();
+  assert.equal(view(t), 'space');
+  assert.equal(t.$('#title').textContent, 'Cellar');
+  assert.deepEqual(t.$$('.space.on .thing').map(e => e.textContent), ['the boiler']);
+  t.open('the boiler');
+  assert.equal(view(t), 'thing');
+  assert.ok(t.$('#thing .edit'));
+  tap(t, '#back');
+  assert.equal(view(t), 'space');
+  assert.equal(t.$('.edit'), null);   // leaving the page closes it
+  tap(t, '#back');
+  assert.equal(view(t), 'spaces');
+});
+
+test('saving or deleting a thing returns to where it was opened from', () => {
+  const t = boot({ seed: SEED });
+  tap(t, '[data-tab="spaces"]');
+  t.$$('#tiles [data-tile]')[0].click();
+  t.open('coat stand');
+  t.$('.edit [data-act="save"]').click();
+  assert.equal(view(t), 'space');
+  t.open('coat stand');
+  t.$('.edit [data-act="delete"]').click();
+  assert.equal(view(t), 'space');
+  assert.deepEqual(t.thingsIn('Hall'), []);
+});
+
+test('deleting the open space returns to Spaces', () => {
+  const t = boot({ seed: SEED });
+  tap(t, '[data-tab="spaces"]');
+  t.$$('#tiles [data-tile]')[0].click();
+  t.$('.space.on [data-act="drop-space"]').click();
+  assert.equal(view(t), 'spaces');
+  assert.deepEqual(t.$$('#tiles [data-tile]').map(e => e.querySelector('.tile-name').textContent), ['Cellar']);
+});
+
+test('search finds things and spaces by name as you type, and a result opens it', () => {
+  const t = boot({ seed: NEEDS() });
+  tap(t, '[data-tab="spaces"]');
+  const s = t.$('#search');
+  s.value = 'ER';
+  s.dispatchEvent(new t.w.Event('input'));
+  assert.deepEqual(t.$$('#results [data-thing] .thing').map(e => e.textContent), ['Boiler', 'Dryer']);
+  assert.deepEqual(t.$$('#results [data-tile]'), []);
+  s.value = 'cell';
+  s.dispatchEvent(new t.w.Event('input'));
+  assert.deepEqual(t.$$('#results [data-tile] .tile-name').map(e => e.textContent), ['Cellar']);
+  s.value = 'boil';
+  s.dispatchEvent(new t.w.Event('input'));
+  t.$('#results [data-thing]').click();
+  assert.equal(view(t), 'thing');
+  s.value = '';
+  s.dispatchEvent(new t.w.Event('input'));
+  assert.equal(t.$('#results').textContent, '');
+});
+
+test('Due counts what is overdue on its tab, and shows a calm line when nothing is due', () => {
+  const t = boot({ seed: NEEDS() });
+  assert.equal(t.$('[data-tab="due"] .badge').textContent, '1');   // the boiler; never-done isn't overdue
+  const calm = boot({ seed: SEED });
+  assert.equal(calm.$('[data-tab="due"] .badge'), null);
+  assert.equal(calm.$('#due').textContent, '');
+  assert.match(calm.$('.v-due').textContent, /Nothing due/);
+});
+
+test('Done on a thing page marks that need done today', () => {
+  const t = boot({ seed: NEEDS() });
+  t.open('Boiler');
+  t.$('.edit .need [data-act="need-done"]').click();
+  assert.equal(t.stored().things[0].needs[0].last, iso(0));
+  assert.ok(t.$('.edit'));   // the page stays open
+});
+
+test('Art lists the works by the space they are in, and a work opens its page', async () => {
+  const t = boot({ seed: SEED });
+  await importArt(t, ART_FILE);
+  tap(t, '[data-tab="art"]');
+  assert.deepEqual(t.$$('#art-list h2').map(e => e.textContent), ['Hall', 'Art to place']);
+  assert.deepEqual(t.$$('#art-list .thing').map(e => e.textContent), ['Blue Study', 'Grey Field', 'Untitled (Cy Fixture)']);
+  t.$('#art-list [data-thing]').click();
+  assert.equal(view(t), 'thing');
+  assert.ok(t.$$('.edit .fields div').length);
+});
+
+test('the + on Spaces opens the say-a-room sheet; the importers sit under More', () => {
+  const t = boot();
+  tap(t, '[data-tab="spaces"]');
+  assert.equal(t.$('#fab').hidden, false);
+  tap(t, '#fab');
+  assert.equal(t.$('#add-sheet').hidden, false);
+  t.addSpace('Kitchen has a kettle');
+  assert.equal(t.$('#add-sheet').hidden, true);   // closes once it is added
+  tap(t, '[data-tab="due"]');
+  assert.equal(t.$('#fab').hidden, true);
+  tap(t, '#more-btn');
+  assert.equal(t.$('#more-sheet').hidden, false);
+  assert.ok(t.$('#more-sheet #art-file') && t.$('#more-sheet #import-text') && t.$('#more-sheet .ver'));
+});
