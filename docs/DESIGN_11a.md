@@ -39,7 +39,14 @@ Three looks to try, each with the same layout:
 
 Plus **Roomy / Compact** density and **Sans / Serif** headings.
 
-## Open points (N. answers; Claude's recommendation; the default stands from 2026-11-10 unless N. changes it)
+## N.'s choices (2026-11-08)
+
+**Hearth, Compact, Sans, Due first**: "a great version to test in real
+life for a bit". The points N. didn't name stand on Claude's
+recommendation: the three tabs, search built in 11b, icons guessed from
+the room name, and Night following the phone's dark mode.
+
+## Open points as put (N. answers; Claude's recommendation; the default stands from 2026-11-10 unless N. changes it)
 
 1. **The tabs: Due · Spaces · Art?**: Claude recommends yes. Three is
    the most a thumb finds without looking; locks (Lares 6) and anything
