@@ -19,7 +19,8 @@ config/*.key
 config/*-key.json
 config/credentials.json
 config/token*.json
-config/llm.json          # holds api_key; the gap the Kairos audit caught
+# config/llm.json holds api_key; the gap the Kairos audit caught
+config/llm.json
 *-key.json
 *secret*
 *credentials*
@@ -36,7 +37,8 @@ config/llm.json          # holds api_key; the gap the Kairos audit caught
 # ── Real personal data, fixtures, debug dumps ──
 *debug*dump*
 *_dump.md
-fixtures/real/           # real-data fixtures live here and never sync
+# real-data fixtures live here and never sync (git takes no comment after a pattern)
+fixtures/real/
 emails/
 *.eml
 
