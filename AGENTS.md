@@ -53,7 +53,7 @@ The rules for every Kairos session, whichever agent runs it (Claude Code, Antigr
 - **Shared knowledge lives in the repos,** never only in one agent's memory: a fact another agent will need goes into the backlog, a design note or a README, where every agent with that repo in its row reads it.
 
 ## Where the detail lives
-- **Charter** (`kairos-foundation/FOUNDATION_CHARTER.md`): the class-by-tier matrix (Part 1), decisions vs. mechanisms and enforcement below the agent (Part 2), public repos and the Whiteboard's one door (Part 7), the Actors (Part 10).
+- **Charter** (`kairos-foundation/FOUNDATION_CHARTER.md`): the class-by-tier matrix (Part 1), decisions vs. mechanisms and enforcement below the agent (Part 2), public repos (Part 7), the Actors (Part 10).
 - **Backlog** (`kairos-system/BACKLOG.md`, Held: not for an agent whose row stops at Public): its head for the story format (DoD first, radius, designations); *Buckets* for the bucket rules.
 - **A module:** its row in `kairos-foundation/REGISTRY.md` (tier, data class, repo, egress doors, deploy), written before any code; `kairos-foundation/MODULE_TEMPLATE.md` for its class's skeleton, conventions and deploy; its own README.
 - **What never gets committed:** `kairos-foundation/gitignore_canonical.gitignore`.
