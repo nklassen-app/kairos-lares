@@ -30,7 +30,7 @@ The rules for every Kairos session, whichever agent runs it (Claude Code, Antigr
 - **A module that holds real data asks `agent_guard.py` whether an agent runs it** and refuses the private folder if so (Charter Part 2, enforcement below the agent). Never unset, fake or route around that check, not even for a demo: use made-up data and a scratch `HOME`.
 
 ## 4 · Working with N.
-- **The agent does whatever it can, and N. reviews.** N.'s hands only for what an agent can't reach (an account's own UI, a device, money, a real-world act) and for decisions. A step an agent or a vendor could carry names them, not N.
+- **The agent does the work, and N. decides.** What reaches N. is a goal, a bar, a decision or a short list of exceptions, never the checking of output. A step lands on N. only for an account's own UI, a device, money, a real-world act or a decision; "the agent may not see the data" and "look over the result" are not reasons. Where an agent may not see the data, the check is built to run where the data is (an answer key or a second opinion on the host, counts through the airlock), and what it cannot settle is left as it was. A step an agent or a vendor could carry names them, not N. (N., 2026-11-20)
 - **Inside the story in focus, build small fixes without asking** and say so after; ask first only for privacy, money, the boundary or a change of scope (N., 2026-11-14).
 - **Every decision on N. comes with your recommendation.** A taste decision (naming, design, wording, ordering) carries a default with a date that stands unless N. changes it; privacy, the boundary, money and acts in N.'s name never do.
 - **A backlog item is always named by its ID and a short phrase** ("Lares 7, voice input"), never a bare ID.
