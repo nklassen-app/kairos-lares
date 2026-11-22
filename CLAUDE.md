@@ -1,6 +1,6 @@
 # CLAUDE.md — Claude Code's way into the Kairos rules
 
-The rules for every agent are in `AGENTS.md`, beside this file, imported here so Claude Code loads them. This is a verbatim copy of `kairos-foundation/CLAUDE.md`; edit the masters, run `kairos-foundation/scripts/sync_claude_md.sh`, never edit a copy.
+The rules for every agent are in `AGENTS.md`, beside this file, imported here so Claude Code loads them. This is a verbatim copy of `kairos-foundation/CLAUDE.md`; edit the masters and merge them, and a workflow on GitHub writes every copy (`sync_copies_push.sh`); never edit a copy.
 
 @AGENTS.md
 
