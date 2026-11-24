@@ -26,7 +26,7 @@ The rules for every Kairos session, whichever agent runs it (Claude Code, Antigr
 - Decisions about what is sensitive or may cross are **N.'s, by hand**: surface them, never resolve them silently. Mechanisms (secrets, egress) are built once in the foundation; never hand-roll a per-app variant.
 - Secrets come from the environment via `config.py` (`load_environment()`, `require_secret()`); real values only in a gitignored `.env`.
 - **No outbound call** without a justified reason. A justified one goes through **one** function that assembles what is sent and where, and is listed in the module's Registry row; any other call (logging, CDN, analytics) is a breach to flag. **A new dependency** is a possible egress channel: flag it, never add it silently.
-- **Model calls** go only through `send_to_model(payload, data_class, tier)` (`model_door.py`), which refuses what the matrix forbids.
+- **Model calls** go only through the door, `model_door.py`: `send_to_model(payload, data_class, tier)`, and `stream_conversation` for N.'s own conversations on the bench at the Home tier; every entry point shares the door's one route check, which refuses what the matrix forbids (N., 2026-11-24).
 - **A module that holds real data asks `agent_guard.py` whether an agent runs it** and refuses the private folder if so (Charter Part 2, enforcement below the agent). Never unset, fake or route around that check, not even for a demo: use made-up data and a scratch `HOME`.
 
 ## 4 · Working with N.
